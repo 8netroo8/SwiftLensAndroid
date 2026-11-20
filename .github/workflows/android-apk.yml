@@ -67,6 +67,9 @@ jobs:
       - name: Install Android 16 emulator image
         run: sdkmanager "platforms;android-36" "system-images;android-36;google_apis;arm64-v8a" "emulator"
 
+      - name: Start ADB server
+        run: adb start-server
+
       - name: Capture app pages
         uses: reactivecircus/android-emulator-runner@v2
         with:
