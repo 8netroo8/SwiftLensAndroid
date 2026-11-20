@@ -1,6 +1,6 @@
 # SwiftLens Android
 
-An Android 16-targeted SwiftLens project. The floating Translate Lens reads visible accessibility text nodes near the user's drop point. English ↔ Simplified Chinese translation uses ML Kit's on-device translation models. The Translate tab also supports OCR on an image explicitly chosen from the photo picker and speech dictation with Android's on-device recognizer when the device supports it. No ads or billing are included.
+An Android 16-targeted SwiftLens project with dedicated Home, Text, Lens, Chat, Subtitle, Photo, Voice, Language, and Settings pages. The floating Translate Lens reads visible accessibility text nodes near the user's drop point. English ↔ Simplified Chinese translation uses ML Kit's on-device translation models. Photo OCR runs on an image explicitly chosen from the photo picker; voice dictation uses Android's on-device recognizer when supported. No ads or billing are included.
 
 ## Open and run
 
@@ -10,7 +10,7 @@ An Android 16-targeted SwiftLens project. The floating Translate Lens reads visi
 
 ## Build APK online
 
-The **Build Android APK** GitHub Actions workflow runs on pushes to `main` and can also be started from the repository's **Actions** tab with **Run workflow**. When it succeeds, open that run and download the `SwiftLensAndroid-debug` artifact. The artifact contains a debug APK and is retained for 14 days.
+The **Build Android APK** GitHub Actions workflow runs on pushes to `main` and can also be started from the repository's **Actions** tab with **Run workflow**. On success, download `SwiftLensAndroid-debug` for the APK and `SwiftLensAndroid-ui-previews` for Android 16 emulator screenshots. Both artifacts are retained for 14 days.
 
 ## Translate Lens
 

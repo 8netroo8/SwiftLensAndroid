@@ -48,3 +48,49 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  screenshots:
+    name: Capture UI previews
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: SwiftLensAndroid-debug
+          path: apk
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools emulator'
+
+      - name: Install Android 16 emulator image
+        run: sdkmanager "platforms;android-36" "system-images;android-36;google_apis;x86_64" "emulator"
+
+      - name: Capture app pages
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
+          script: |
+            adb install apk/app-debug.apk
+            mkdir -p screenshots
+            for page in Home Translate Lens Setup Photo Voice Chat Subtitles Settings Languages; do
+              adb shell am force-stop app.swifttranslate
+              adb shell am start -n app.swifttranslate/.MainActivity --es preview_page "$page"
+              sleep 3
+              adb shell screencap -p "/sdcard/${page}.png"
+              adb pull "/sdcard/${page}.png" "screenshots/${page}.png"
+            done
+
+      - name: Upload UI screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: SwiftLensAndroid-ui-previews
+          path: screenshots/*.png
+          if-no-files-found: error
+          retention-days: 14
+

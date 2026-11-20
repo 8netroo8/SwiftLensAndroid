@@ -1,16 +1,18 @@
 package app.swifttranslate
 
-import android.os.Bundle
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
+import android.provider.Settings
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
-import android.provider.Settings
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,11 +23,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,205 +41,328 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 
-private val Ink = Color(0xFF18221F)
-private val Green = Color(0xFFB9F27C)
-private val Canvas = Color(0xFFF5F6F1)
-private val Muted = Color(0xFF78817C)
+private val Blue = Color(0xFF2878F0)
+private val Navy = Color(0xFF16243A)
+private val Page = Color(0xFFF5F7FA)
+private val Secondary = Color(0xFF768397)
+private val PaleBlue = Color(0xFFEAF2FF)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { SwiftApp() }
+        setContent { SwiftLensApp(intent.getStringExtra("preview_page") ?: "Home") }
     }
 }
 
 @Composable
-private fun SwiftApp() {
+private fun SwiftLensApp(initialPage: String) {
     val context = LocalContext.current
-    var tab by remember { mutableStateOf("Home") }
-    var selected by remember { mutableStateOf<String?>(null) }
-    MaterialTheme(colorScheme = lightColorScheme(primary = Ink, background = Canvas, surface = Color.White)) {
-        Scaffold(containerColor = Canvas, bottomBar = {
-            NavigationBar(containerColor = Color.White) {
-                listOf("Home" to Icons.Default.Home, "Translate" to Icons.Default.Translate, "Chats" to Icons.Default.ChatBubbleOutline, "Settings" to Icons.Default.Settings).forEach { (name, icon) ->
-                    NavigationBarItem(selected = tab == name, onClick = { tab = name; selected = null }, icon = { Icon(icon, null) }, label = { Text(name) })
+    var page by remember { mutableStateOf(initialPage) }
+    var draft by remember { mutableStateOf("") }
+    var englishToChinese by remember { mutableStateOf(true) }
+    val rootPages = setOf("Home", "Translate", "Lens", "Settings")
+    BackHandler(page !in rootPages) { page = "Home" }
+    MaterialTheme(colorScheme = lightColorScheme(primary = Blue, background = Page, surface = Color.White)) {
+        Scaffold(containerColor = Page, bottomBar = {
+            if (page in rootPages) NavigationBar(containerColor = Color.White) {
+                listOf("Home" to Icons.Default.Home, "Translate" to Icons.Default.Translate, "Lens" to Icons.Default.Lens, "Settings" to Icons.Default.Settings).forEach { (name, icon) ->
+                    NavigationBarItem(selected = page == name, onClick = { page = name }, icon = { Icon(icon, null) }, label = { Text(name) }, colors = NavigationBarItemDefaults.colors(selectedIconColor = Blue, selectedTextColor = Blue, indicatorColor = PaleBlue))
                 }
             }
-        }) { padding ->
-            when (tab) {
-                "Home" -> HomeScreen(Modifier.padding(padding), onOpen = {
-                    if (it == "Screen translation") {
-                        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                    } else if (it == "Photos & voice") tab = "Translate" else selected = it
-                })
-                "Translate" -> TranslateScreen(Modifier.padding(padding))
-                "Chats" -> ChatScreen(Modifier.padding(padding)) { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
-                else -> SettingsScreen(Modifier.padding(padding))
-            }
-            selected?.let { FeatureDialog(it) { selected = null } }
-        }
-    }
-}
-
-@Composable
-private fun HomeScreen(modifier: Modifier, onOpen: (String) -> Unit) {
-    LazyColumn(modifier.fillMaxSize().padding(horizontal = 22.dp), contentPadding = PaddingValues(top = 24.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.weight(1f)) { Text("SwiftLens", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Ink); Text("Your words, understood everywhere.", color = Muted, fontSize = 14.sp) }
-                Box(Modifier.size(42.dp).background(Green, CircleShape), Alignment.Center) { Icon(Icons.Default.Bolt, null, tint = Ink) }
-            }
-        }
-        item {
-            Column(Modifier.fillMaxWidth().background(Ink, RoundedCornerShape(26.dp)).padding(22.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.AutoAwesome, null, tint = Green); Spacer(Modifier.width(8.dp)); Text("READY WHEN YOU ARE", color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp) }
-                Spacer(Modifier.height(15.dp)); Text("Translate without\nleaving your app.", color = Color.White, fontSize = 25.sp, lineHeight = 31.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(10.dp)); Text("Turn on the floating bubble to read messages, posts and games in your language.", color = Color(0xFFD2D9D4), fontSize = 14.sp, lineHeight = 20.sp)
-                Spacer(Modifier.height(18.dp)); Button(onClick = { onOpen("Screen translation") }, colors = ButtonDefaults.buttonColors(containerColor = Green, contentColor = Ink), shape = RoundedCornerShape(14.dp)) { Text("Set up screen translation", fontWeight = FontWeight.SemiBold); Spacer(Modifier.width(8.dp)); Icon(Icons.Default.ArrowForward, null) }
-            }
-        }
-        item { Text("TRANSLATE YOUR WAY", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp, modifier = Modifier.padding(top = 4.dp)) }
-        item { FeatureRow("Chat apps", "Translate as you read and reply", Icons.Default.Forum, onOpen) }
-        item { FeatureRow("Chat mode", "Translate individual messages", Icons.Default.SwapHoriz, onOpen) }
-        item { FeatureRow("Subtitles & audio", "Translate exposed subtitle text", Icons.Default.ClosedCaption, onOpen) }
-        item { FeatureRow("Photos & voice", "Recognize a chosen photo or dictate", Icons.Default.CameraAlt, onOpen) }
-        item {
-            Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(18.dp)).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Language, null, tint = Ink); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text("Translation languages", fontWeight = FontWeight.SemiBold, color = Ink); Text("English  →  中文", color = Muted, fontSize = 13.sp) }; Icon(Icons.Default.ChevronRight, null, tint = Muted)
+        }) { inset ->
+            val modifier = Modifier.padding(inset)
+            when (page) {
+                "Home" -> HomePage(modifier, { page = it })
+                "Translate" -> TranslatePage(modifier, draft, { draft = it }, englishToChinese, { englishToChinese = !englishToChinese }, { page = it })
+                "Lens" -> LensPage(modifier, { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }, { page = it })
+                "Settings" -> SettingsPage(modifier, { page = it }, englishToChinese)
+                "Languages" -> LanguagePage(modifier, englishToChinese, { englishToChinese = it; page = "Settings" })
+                "Setup" -> SetupPage(modifier, { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }, { page = "Lens" })
+                "Photo" -> PhotoPage(modifier, { draft = it; page = "Translate" }, { page = "Home" })
+                "Voice" -> VoicePage(modifier, englishToChinese, { draft = it; page = "Translate" }, { page = "Home" })
+                "Chat" -> ChatPage(modifier, { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) })
+                "Subtitles" -> SubtitlePage(modifier, { page = "Setup" })
+                "Privacy" -> InfoPage(modifier, "Privacy", "SwiftLens translates text on this device with downloaded models. The lens reads only the accessibility text node near the point where you drop it. Selected photos are processed locally. No display capture, notifications, ads, or billing are used.") { page = "Settings" }
+                "About" -> InfoPage(modifier, "About SwiftLens", "SwiftLens for Android · English ↔ Simplified Chinese · Android 16 target") { page = "Settings" }
+                else -> HomePage(modifier, { page = it })
             }
         }
     }
 }
 
 @Composable
-private fun FeatureRow(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onOpen: (String) -> Unit) {
-    Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(18.dp)).clickable { onOpen(title) }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(42.dp).background(Color(0xFFF0F4E9), RoundedCornerShape(13.dp)), Alignment.Center) { Icon(icon, null, tint = Ink) }
-        Spacer(Modifier.width(13.dp)); Column(Modifier.weight(1f)) { Text(title, fontWeight = FontWeight.SemiBold, color = Ink); Text(subtitle, color = Muted, fontSize = 12.sp) }; Icon(Icons.Default.ChevronRight, null, tint = Muted)
+private fun PageFrame(modifier: Modifier, title: String, subtitle: String? = null, content: @Composable ColumnScope.() -> Unit) {
+    LazyColumn(modifier.fillMaxSize().padding(horizontal = 20.dp), contentPadding = PaddingValues(top = 20.dp, bottom = 26.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(title, fontSize = 27.sp, fontWeight = FontWeight.Bold, color = Navy)
+                if (subtitle != null) Text(subtitle, color = Secondary, fontSize = 14.sp, lineHeight = 20.sp)
+            }
+        }
+        item { Column(verticalArrangement = Arrangement.spacedBy(14.dp), content = content) }
     }
 }
 
 @Composable
-private fun TranslateScreen(modifier: Modifier) {
-    val context = LocalContext.current
-    var source by remember { mutableStateOf("") }
+private fun HomePage(modifier: Modifier, open: (String) -> Unit) {
+    PageFrame(modifier, "SwiftLens", "Translate messages, text and speech.") {
+        Column(Modifier.fillMaxWidth().background(Blue, RoundedCornerShape(24.dp)).padding(22.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("TRANSLATE ANYWHERE", color = Color.White.copy(alpha = .78f), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Spacer(Modifier.height(9.dp)); Text("Understand every\nconversation.", color = Color.White, fontSize = 25.sp, lineHeight = 30.sp, fontWeight = FontWeight.Bold)
+                }
+                Box(Modifier.size(58.dp).background(Color.White.copy(alpha = .17f), CircleShape), Alignment.Center) { Icon(Icons.Default.Translate, null, tint = Color.White, modifier = Modifier.size(30.dp)) }
+            }
+            Spacer(Modifier.height(18.dp))
+            Button(onClick = { open("Setup") }, colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Blue), shape = RoundedCornerShape(14.dp)) {
+                Icon(Icons.Default.Lens, null); Spacer(Modifier.width(8.dp)); Text("Set up Translate Lens", fontWeight = FontWeight.SemiBold); Spacer(Modifier.width(4.dp)); Icon(Icons.Default.ArrowForward, null)
+            }
+        }
+        Text("QUICK TRANSLATE", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Secondary, letterSpacing = 1.2.sp, modifier = Modifier.padding(top = 4.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ActionCard("Text", "Type or paste", Icons.Default.Translate, Modifier.weight(1f)) { open("Translate") }
+            ActionCard("Photo", "Choose an image", Icons.Default.Image, Modifier.weight(1f)) { open("Photo") }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ActionCard("Voice", "Speak to translate", Icons.Default.Mic, Modifier.weight(1f)) { open("Voice") }
+            ActionCard("Chat apps", "Use the lens in chats", Icons.Default.ChatBubbleOutline, Modifier.weight(1f)) { open("Chat") }
+        }
+        Surface(color = Color.White, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth().clickable { open("Subtitles") }) {
+            Row(Modifier.padding(17.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.ClosedCaption, null, tint = Blue); Spacer(Modifier.width(13.dp)); Column(Modifier.weight(1f)) { Text("Video subtitles", color = Navy, fontWeight = FontWeight.SemiBold); Text("Translate accessible captions", color = Secondary, fontSize = 12.sp) }; Icon(Icons.Default.ChevronRight, null, tint = Secondary)
+            }
+        }
+        Row(Modifier.fillMaxWidth().clickable { open("Languages") }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Language, null, tint = Blue); Spacer(Modifier.width(10.dp)); Text("English  ↔  简体中文", Modifier.weight(1f), color = Navy, fontWeight = FontWeight.Medium); Icon(Icons.Default.ChevronRight, null, tint = Secondary)
+        }
+    }
+}
+
+@Composable
+private fun ActionCard(title: String, note: String, icon: ImageVector, modifier: Modifier, onClick: () -> Unit) {
+    Surface(modifier.clickable(onClick = onClick), color = Color.White, shape = RoundedCornerShape(18.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
+            Box(Modifier.size(38.dp).background(PaleBlue, RoundedCornerShape(12.dp)), Alignment.Center) { Icon(icon, null, tint = Blue) }
+            Column { Text(title, color = Navy, fontWeight = FontWeight.SemiBold); Text(note, color = Secondary, fontSize = 11.sp) }
+        }
+    }
+}
+
+@Composable
+private fun TranslatePage(modifier: Modifier, draft: String, onDraft: (String) -> Unit, enToZh: Boolean, swap: () -> Unit, open: (String) -> Unit) {
+    var source by remember(draft) { mutableStateOf(draft) }
     var result by remember { mutableStateOf("") }
-    var pair by remember { mutableStateOf(false) }
-    var listening by remember { mutableStateOf(false) }
-    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
+    PageFrame(modifier, "Text translation", "Type, paste, speak or choose a photo.") {
+        Surface(color = Color.White, shape = RoundedCornerShape(18.dp)) {
+            Row(Modifier.fillMaxWidth().clickable(onClick = swap).padding(15.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                Text(if (enToZh) "English" else "简体中文", color = Navy, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.width(20.dp)); Icon(Icons.Default.SwapHoriz, null, tint = Blue); Spacer(Modifier.width(20.dp))
+                Text(if (enToZh) "简体中文" else "English", color = Navy, fontWeight = FontWeight.SemiBold)
+            }
+        }
+        OutlinedTextField(source, { source = it; onDraft(it) }, Modifier.fillMaxWidth().height(180.dp), placeholder = { Text("Enter text") }, shape = RoundedCornerShape(18.dp), trailingIcon = { IconButton(onClick = { source = ""; onDraft("") }) { Icon(Icons.Default.Close, "Clear") } }, colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = Color(0xFFE4E9F0), focusedBorderColor = Blue, focusedContainerColor = Color.White, unfocusedContainerColor = Color.White))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(onClick = { open("Photo") }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp)) { Icon(Icons.Default.Image, null); Spacer(Modifier.width(5.dp)); Text("Photo") }
+            OutlinedButton(onClick = { open("Voice") }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp)) { Icon(Icons.Default.Mic, null); Spacer(Modifier.width(5.dp)); Text("Voice") }
+        }
+        Button(onClick = {
+            if (source.isBlank()) result = "Enter text to translate."
+            else {
+                result = "Translating…"
+                val from = if (enToZh) TranslateLanguage.ENGLISH else TranslateLanguage.CHINESE
+                val to = if (enToZh) TranslateLanguage.CHINESE else TranslateLanguage.ENGLISH
+                val zhModel = TranslateRemoteModel.Builder(TranslateLanguage.CHINESE).build()
+                RemoteModelManager.getInstance().isModelDownloaded(zhModel).addOnSuccessListener { ready ->
+                    if (!ready) result = "Download the Chinese offline model from the Lens menu first."
+                    else {
+                        val translator = Translation.getClient(TranslatorOptions.Builder().setSourceLanguage(from).setTargetLanguage(to).build())
+                        translator.translate(source.trim()).addOnSuccessListener { result = it; translator.close() }.addOnFailureListener { result = "Translation failed. Try again."; translator.close() }
+                    }
+                }.addOnFailureListener { result = "Could not check offline model status." }
+            }
+        }, Modifier.fillMaxWidth().height(52.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue), shape = RoundedCornerShape(15.dp)) { Icon(Icons.Default.Translate, null); Spacer(Modifier.width(8.dp)); Text("Translate", fontWeight = FontWeight.SemiBold) }
+        if (result.isNotBlank()) Surface(color = Color.White, shape = RoundedCornerShape(18.dp)) { Column(Modifier.fillMaxWidth().padding(18.dp)) { Text("TRANSLATION", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Secondary, letterSpacing = 1.sp); Spacer(Modifier.height(8.dp)); Text(result, color = Navy, fontSize = 18.sp, lineHeight = 25.sp) } }
+        Text("Offline translation is available after the Chinese model is downloaded.", color = Secondary, fontSize = 12.sp, lineHeight = 17.sp)
+    }
+}
+
+@Composable
+private fun LensPage(modifier: Modifier, setup: () -> Unit, open: (String) -> Unit) {
+    PageFrame(modifier, "Screen translator", "Translate text inside other apps with a floating lens.") {
+        Surface(color = Color.White, shape = RoundedCornerShape(22.dp)) {
+            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.size(82.dp).background(PaleBlue, CircleShape), Alignment.Center) { Icon(Icons.Default.Lens, null, tint = Blue, modifier = Modifier.size(38.dp)) }
+                Text("Translate Lens", color = Navy, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text("Drag the bubble onto a message, post or subtitle. SwiftLens reads the nearest accessibility text node and shows the translation beside it.", color = Secondary, fontSize = 13.sp, lineHeight = 19.sp)
+                Button(onClick = setup, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Blue), shape = RoundedCornerShape(14.dp)) { Text("Enable Accessibility Service") }
+                OutlinedButton(onClick = { open("Setup") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text("View setup steps") }
+            }
+        }
+        ModelCard()
+        Text("Canvas-rendered, image-only and protected text may not be available through Accessibility.", color = Secondary, fontSize = 12.sp, lineHeight = 17.sp)
+    }
+}
+
+@Composable
+private fun ModelCard() {
+    val manager = remember { RemoteModelManager.getInstance() }
+    val model = remember { TranslateRemoteModel.Builder(TranslateLanguage.CHINESE).build() }
+    var status by remember { mutableStateOf("Checking model…") }
+    LaunchedEffect(Unit) { manager.isModelDownloaded(model).addOnSuccessListener { status = if (it) "Chinese model downloaded" else "Chinese model not downloaded" } }
+    Surface(color = Color.White, shape = RoundedCornerShape(18.dp)) {
+        Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.CloudDownload, null, tint = Blue); Spacer(Modifier.width(10.dp)); Column { Text("Offline language model", color = Navy, fontWeight = FontWeight.SemiBold); Text(status, color = Secondary, fontSize = 12.sp) } }
+            Text("Open the floating lens menu to download or remove the Chinese model.", color = Secondary, fontSize = 12.sp, lineHeight = 17.sp)
+        }
+    }
+}
+
+@Composable
+private fun SetupPage(modifier: Modifier, openAccessibility: () -> Unit, done: () -> Unit) {
+    PageFrame(modifier, "Set up Translate Lens", "Allow SwiftLens to read only the text you point the lens at.") {
+        listOf("1" to "Open Accessibility settings", "2" to "Choose SwiftLens and turn it on", "3" to "Return here, then drag the floating lens onto text").forEach { (number, text) ->
+            Surface(color = Color.White, shape = RoundedCornerShape(16.dp)) { Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(34.dp).background(PaleBlue, CircleShape), Alignment.Center) { Text(number, color = Blue, fontWeight = FontWeight.Bold) }; Spacer(Modifier.width(13.dp)); Text(text, color = Navy, fontWeight = FontWeight.Medium, lineHeight = 20.sp) } }
+        }
+        Button(onClick = openAccessibility, modifier = Modifier.fillMaxWidth().height(52.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue), shape = RoundedCornerShape(14.dp)) { Text("Open Accessibility settings") }
+        TextButton(onClick = done, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("I’ll do this later", color = Secondary) }
+        Text("SwiftLens does not use MediaProjection, screen recording or screenshots.", color = Secondary, fontSize = 12.sp, lineHeight = 17.sp)
+    }
+}
+
+@Composable
+private fun ChatPage(modifier: Modifier, setup: () -> Unit) {
+    PageFrame(modifier, "Chat translator", "Use the floating lens inside your messaging apps.") {
+        listOf("WhatsApp", "Instagram", "Telegram", "Messenger", "Discord", "Other apps").forEach { app ->
+            Surface(color = Color.White, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(15.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(38.dp).background(PaleBlue, RoundedCornerShape(12.dp)), Alignment.Center) { Icon(Icons.Default.ChatBubbleOutline, null, tint = Blue) }; Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text(app, color = Navy, fontWeight = FontWeight.SemiBold); Text("Drag the lens over a message", color = Secondary, fontSize = 12.sp) }; Icon(Icons.Default.ChevronRight, null, tint = Secondary) }
+            }
+        }
+        Button(onClick = setup, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Blue), shape = RoundedCornerShape(14.dp)) { Text("Set up Translate Lens") }
+        Text("This build translates exposed text nodes one at a time. It does not read notifications or monitor chats in the background.", color = Secondary, fontSize = 12.sp, lineHeight = 17.sp)
+    }
+}
+
+@Composable
+private fun SubtitlePage(modifier: Modifier, setup: () -> Unit) {
+    PageFrame(modifier, "Subtitle translator", "Translate captions when the video app exposes their text.") {
+        Surface(color = Color.White, shape = RoundedCornerShape(20.dp)) {
+            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Icon(Icons.Default.ClosedCaption, null, tint = Blue, modifier = Modifier.size(34.dp))
+                Text("Point the lens at a caption", color = Navy, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                Text("Open a video with accessible captions, enable Translate Lens, then drag it onto a caption. SwiftLens reads the caption node exposed by that app.", color = Secondary, lineHeight = 20.sp)
+                Text("Video audio transcription and screen capture are not part of this build.", color = Secondary, fontSize = 12.sp)
+            }
+        }
+        Button(onClick = setup, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Blue), shape = RoundedCornerShape(14.dp)) { Text("Set up Translate Lens") }
+    }
+}
+
+@Composable
+private fun PhotoPage(modifier: Modifier, onText: (String) -> Unit, back: () -> Unit) {
+    val context = LocalContext.current
+    var status by remember { mutableStateOf("Choose a photo containing text.") }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
         if (uri != null) {
-            result = "Recognizing selected image…"
+            status = "Recognizing selected photo…"
             try {
                 val image = InputImage.fromFilePath(context, uri)
                 val recognizer = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
-                recognizer.process(image)
-                    .addOnSuccessListener { text ->
-                        source = text.text
-                        result = if (text.text.isBlank()) "No readable text found in this image." else "Image text loaded. Tap Translate."
-                        recognizer.close()
-                    }
-                    .addOnFailureListener { result = "Could not read this image."; recognizer.close() }
-            } catch (_: Exception) { result = "Could not open this image." }
+                recognizer.process(image).addOnSuccessListener { result ->
+                    recognizer.close()
+                    if (result.text.isBlank()) status = "No text found. Try a clearer photo."
+                    else { status = "Text recognized."; onText(result.text) }
+                }.addOnFailureListener { recognizer.close(); status = "Could not read this photo." }
+            } catch (_: Exception) { status = "Could not open this photo." }
         }
     }
-    val speechRecognizer = remember {
-        if (Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context))
-            SpeechRecognizer.createOnDeviceSpeechRecognizer(context) else null
+    PageFrame(modifier, "Photo translator", "Select a photo and recognize its text on this device.") {
+        Surface(color = Color.White, shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth().height(230.dp).clickable { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
+            Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Box(Modifier.size(64.dp).background(PaleBlue, CircleShape), Alignment.Center) { Icon(Icons.Default.AddPhotoAlternate, null, tint = Blue, modifier = Modifier.size(30.dp)) }
+                Spacer(Modifier.height(13.dp)); Text("Choose photo", color = Navy, fontWeight = FontWeight.SemiBold); Text("From your photo library", color = Secondary, fontSize = 12.sp)
+            }
+        }
+        Button(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Blue), shape = RoundedCornerShape(14.dp)) { Icon(Icons.Default.Image, null); Spacer(Modifier.width(8.dp)); Text("Select an image") }
+        Text(status, color = Secondary, fontSize = 13.sp)
+        Text("Only the image you choose is processed. This does not capture your display.", color = Secondary, fontSize = 12.sp, lineHeight = 17.sp)
+        TextButton(onClick = back, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Back to home") }
     }
-    DisposableEffect(speechRecognizer) {
-        if (speechRecognizer != null) speechRecognizer.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) { listening = true; result = "Listening on this device…" }
+}
+
+@Composable
+private fun VoicePage(modifier: Modifier, enToZh: Boolean, onText: (String) -> Unit, back: () -> Unit) {
+    val context = LocalContext.current
+    var status by remember { mutableStateOf("Tap the microphone to dictate.") }
+    var listening by remember { mutableStateOf(false) }
+    val recognizer = remember { if (Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) SpeechRecognizer.createOnDeviceSpeechRecognizer(context) else null }
+    DisposableEffect(recognizer) {
+        recognizer?.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) { listening = true; status = "Listening on this device…" }
             override fun onBeginningOfSpeech() {}
             override fun onRmsChanged(rmsdB: Float) {}
             override fun onBufferReceived(buffer: ByteArray?) {}
             override fun onEndOfSpeech() { listening = false }
-            override fun onError(error: Int) { listening = false; result = "On-device speech recognition failed. Check the device language pack and try again." }
-            override fun onResults(results: Bundle?) {
-                listening = false
-                source = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
-                result = if (source.isBlank()) "No speech recognized." else "Speech text loaded. Tap Translate."
-            }
+            override fun onError(error: Int) { listening = false; status = "Speech recognition failed. Check the offline language pack." }
+            override fun onResults(results: Bundle?) { listening = false; val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty(); if (text.isBlank()) status = "No speech recognized." else { status = "Speech recognized."; onText(text) } }
             override fun onPartialResults(partialResults: Bundle?) {}
             override fun onEvent(eventType: Int, params: Bundle?) {}
         })
-        onDispose { speechRecognizer?.destroy() }
+        onDispose { recognizer?.destroy() }
     }
-    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted && speechRecognizer != null) {
-            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (pair) "zh-CN" else "en-US")
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted || recognizer == null) status = "Microphone or on-device recognition is unavailable."
+        else recognizer.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply { putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM); putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (enToZh) "en-US" else "zh-CN") })
+    }
+    PageFrame(modifier, "Voice translator", "Speak and translate with on-device speech recognition.") {
+        Surface(color = Color.White, shape = RoundedCornerShape(22.dp)) {
+            Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text(if (enToZh) "English → 简体中文" else "简体中文 → English", color = Blue, fontWeight = FontWeight.SemiBold)
+                IconButton(onClick = { if (recognizer == null) status = "On-device speech recognition is not available on this device." else permission.launch(android.Manifest.permission.RECORD_AUDIO) }, modifier = Modifier.size(82.dp).background(Blue, CircleShape), enabled = !listening) { Icon(Icons.Default.Mic, "Speak", tint = Color.White, modifier = Modifier.size(34.dp)) }
+                Text(if (listening) "Listening…" else "Tap to speak", color = Navy, fontWeight = FontWeight.SemiBold)
+                Text(status, color = Secondary, fontSize = 13.sp)
             }
-            speechRecognizer.startListening(intent)
-        } else result = "On-device speech recognition or microphone permission is unavailable."
+        }
+        Text("Microphone permission is requested when you tap the microphone. Audio recognition stays on device when supported.", color = Secondary, fontSize = 12.sp, lineHeight = 17.sp)
+        TextButton(onClick = back, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Back to home") }
     }
-    Column(modifier.fillMaxSize().padding(22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("Translate", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Ink)
-        Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(16.dp)).padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-            Text(if (pair) "中文" else "English", Modifier.clickable { pair = !pair }.padding(12.dp), fontWeight = FontWeight.SemiBold)
-            Icon(Icons.Default.SwapHoriz, null, tint = Muted)
-            Text(if (pair) "English" else "中文", Modifier.clickable { pair = !pair }.padding(12.dp), fontWeight = FontWeight.SemiBold)
-        }
-        OutlinedTextField(source, { source = it }, Modifier.fillMaxWidth().height(170.dp), placeholder = { Text("Type, paste, or load text") }, shape = RoundedCornerShape(20.dp), trailingIcon = { IconButton(onClick = { source = "" }) { Icon(Icons.Default.Close, "Clear") } })
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(onClick = { photoPicker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.Image, null); Spacer(Modifier.width(6.dp)); Text("Choose photo") }
-            OutlinedButton(onClick = {
-                if (speechRecognizer == null) result = "This device does not provide on-device speech recognition."
-                else micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
-            }, modifier = Modifier.weight(1f), enabled = !listening) { Icon(Icons.Default.Mic, null); Spacer(Modifier.width(6.dp)); Text(if (listening) "Listening…" else "Speak") }
-        }
-        Button(onClick = {
-            if (source.isBlank()) result = "Enter some text to translate."
-            else {
-                val from = if (pair) TranslateLanguage.CHINESE else TranslateLanguage.ENGLISH
-                val to = if (pair) TranslateLanguage.ENGLISH else TranslateLanguage.CHINESE
-                fun runTranslation() {
-                    val translator = Translation.getClient(TranslatorOptions.Builder().setSourceLanguage(from).setTargetLanguage(to).build())
-                    translator.translate(source.trim())
-                        .addOnSuccessListener { result = it; translator.close() }
-                        .addOnFailureListener { result = "Translation failed. Check that the offline model is installed."; translator.close() }
-                }
-                val zhModel = TranslateRemoteModel.Builder(TranslateLanguage.CHINESE).build()
-                RemoteModelManager.getInstance().isModelDownloaded(zhModel)
-                    .addOnSuccessListener { ready -> if (ready) runTranslation() else result = "Chinese offline model not installed. Download it from the Translate Lens menu while online." }
-                    .addOnFailureListener { result = "Could not check offline model status." }
+}
+
+@Composable
+private fun SettingsPage(modifier: Modifier, open: (String) -> Unit, enToZh: Boolean) {
+    PageFrame(modifier, "Settings") {
+        SettingsRow("Translation languages", if (enToZh) "English → 简体中文" else "简体中文 → English", Icons.Default.Language) { open("Languages") }
+        SettingsRow("Translate Lens", "Accessibility and floating bubble", Icons.Default.Lens) { open("Lens") }
+        SettingsRow("Offline models", "Download or remove language models", Icons.Default.CloudDownload) { open("Lens") }
+        SettingsRow("Privacy", "How SwiftLens reads and translates text", Icons.Default.Security) { open("Privacy") }
+        SettingsRow("About", "SwiftLens for Android · 0.3.0", Icons.Default.Info) { open("About") }
+        Text("No ads · No billing · No screen capture", color = Secondary, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+    }
+}
+
+@Composable
+private fun SettingsRow(title: String, detail: String, icon: ImageVector, onClick: () -> Unit) {
+    Surface(color = Color.White, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) { Icon(icon, null, tint = Blue); Spacer(Modifier.width(13.dp)); Column(Modifier.weight(1f)) { Text(title, color = Navy, fontWeight = FontWeight.SemiBold); Text(detail, color = Secondary, fontSize = 12.sp) }; Icon(Icons.Default.ChevronRight, null, tint = Secondary) }
+    }
+}
+
+@Composable
+private fun LanguagePage(modifier: Modifier, enToZh: Boolean, select: (Boolean) -> Unit) {
+    PageFrame(modifier, "Translation languages", "Choose the direction for text, voice and the floating lens.") {
+        listOf(true to "English → 简体中文", false to "简体中文 → English").forEach { (value, label) ->
+            Surface(color = Color.White, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().clickable { select(value) }) {
+                Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) { Text(label, Modifier.weight(1f), color = Navy, fontWeight = FontWeight.SemiBold); if (value == enToZh) Icon(Icons.Default.CheckCircle, null, tint = Blue) }
             }
-        }, Modifier.fillMaxWidth().height(52.dp), colors = ButtonDefaults.buttonColors(containerColor = Ink), shape = RoundedCornerShape(16.dp)) { Icon(Icons.Default.Translate, null); Spacer(Modifier.width(8.dp)); Text("Translate") }
-        if (result.isNotEmpty()) Text(result, Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(20.dp)).padding(18.dp), color = Ink, fontSize = 17.sp)
-        Text("Translation runs with downloaded offline language models. Photo recognition processes only an image you select. Voice input uses on-device recognition when supported.", color = Muted, fontSize = 13.sp, lineHeight = 18.sp)
-    }
-}
-
-@Composable
-private fun ChatScreen(modifier: Modifier, onSetup: () -> Unit) {
-    Column(modifier.fillMaxSize().padding(22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("Chat mode", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Ink)
-        Text("Translate selected messages while you read or write in another app.", color = Muted)
-        Text("Drag the floating lens over a message to translate its accessibility text node. For replies, copy text into the Translate tab, translate it, then paste it back.", Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(20.dp)).padding(18.dp), color = Ink, lineHeight = 22.sp)
-        Button(onClick = onSetup, colors = ButtonDefaults.buttonColors(containerColor = Ink), shape = RoundedCornerShape(14.dp)) { Text("Set up Translate Lens") }
-        Text("The lens does not read notifications or scan the whole screen. Some apps do not expose their message text to Android Accessibility.", color = Muted, fontSize = 12.sp, lineHeight = 17.sp)
-    }
-}
-
-@Composable
-private fun SettingsScreen(modifier: Modifier) {
-    Column(modifier.fillMaxSize().padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text("Settings", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Ink)
-        listOf("Languages" to "English ↔ 简体中文", "Floating bubble" to "Set up screen translation", "Privacy" to "Translation and selected-photo OCR run on device", "About" to "SwiftLens for Android · 0.2.0").forEach { (title, detail) ->
-            Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(17.dp)).padding(17.dp), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(title, fontWeight = FontWeight.SemiBold); Spacer(Modifier.height(3.dp)); Text(detail, color = Muted, fontSize = 12.sp) }; Icon(Icons.Default.ChevronRight, null, tint = Muted) }
         }
     }
 }
 
 @Composable
-private fun FeatureDialog(feature: String, dismiss: () -> Unit) {
-    val detail = when (feature) {
-        "Chat apps" -> "Open a supported app and drag Translate Lens over the message. The app must expose its text through Android Accessibility."
-        "Chat mode" -> "Use the floating lens on individual messages. SwiftLens does not read notifications or monitor a conversation in the background."
-        "Subtitles & audio" -> "Drag the lens over subtitles only when the video app exposes subtitle text as an accessibility node. Audio transcription is not enabled in this build."
-        else -> "Choose Photos & voice on the Translate tab to recognize a selected image or dictate with on-device speech recognition. No screen image is captured."
+private fun InfoPage(modifier: Modifier, title: String, body: String, back: () -> Unit) {
+    PageFrame(modifier, title) {
+        Surface(color = Color.White, shape = RoundedCornerShape(18.dp)) { Text(body, Modifier.padding(20.dp), color = Navy, lineHeight = 23.sp) }
+        TextButton(onClick = back, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Back to settings") }
     }
-    AlertDialog(onDismissRequest = dismiss, title = { Text(feature) }, text = { Text(detail) }, confirmButton = { TextButton(onClick = dismiss) { Text("Got it") } })
 }
 
