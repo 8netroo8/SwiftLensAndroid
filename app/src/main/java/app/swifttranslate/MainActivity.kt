@@ -2,9 +2,16 @@ package app.swifttranslate
 
 import android.os.Bundle
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -27,6 +34,9 @@ import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.TranslateRemoteModel
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslatorOptions
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 
 private val Ink = Color(0xFF18221F)
 private val Green = Color(0xFFB9F27C)
@@ -57,10 +67,10 @@ private fun SwiftApp() {
                 "Home" -> HomeScreen(Modifier.padding(padding), onOpen = {
                     if (it == "Screen translation") {
                         context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                    } else selected = it
+                    } else if (it == "Photos & voice") tab = "Translate" else selected = it
                 })
                 "Translate" -> TranslateScreen(Modifier.padding(padding))
-                "Chats" -> ChatScreen(Modifier.padding(padding))
+                "Chats" -> ChatScreen(Modifier.padding(padding)) { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
                 else -> SettingsScreen(Modifier.padding(padding))
             }
             selected?.let { FeatureDialog(it) { selected = null } }
@@ -87,9 +97,9 @@ private fun HomeScreen(modifier: Modifier, onOpen: (String) -> Unit) {
         }
         item { Text("TRANSLATE YOUR WAY", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp, modifier = Modifier.padding(top = 4.dp)) }
         item { FeatureRow("Chat apps", "Translate as you read and reply", Icons.Default.Forum, onOpen) }
-        item { FeatureRow("Chat mode", "Follow a whole conversation", Icons.Default.SwapHoriz, onOpen) }
-        item { FeatureRow("Subtitles & audio", "Understand videos as they play", Icons.Default.ClosedCaption, onOpen) }
-        item { FeatureRow("Photos & voice", "Translate what you see or say", Icons.Default.CameraAlt, onOpen) }
+        item { FeatureRow("Chat mode", "Translate individual messages", Icons.Default.SwapHoriz, onOpen) }
+        item { FeatureRow("Subtitles & audio", "Translate exposed subtitle text", Icons.Default.ClosedCaption, onOpen) }
+        item { FeatureRow("Photos & voice", "Recognize a chosen photo or dictate", Icons.Default.CameraAlt, onOpen) }
         item {
             Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(18.dp)).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Language, null, tint = Ink); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Text("Translation languages", fontWeight = FontWeight.SemiBold, color = Ink); Text("English  →  中文", color = Muted, fontSize = 13.sp) }; Icon(Icons.Default.ChevronRight, null, tint = Muted)
@@ -108,9 +118,59 @@ private fun FeatureRow(title: String, subtitle: String, icon: androidx.compose.u
 
 @Composable
 private fun TranslateScreen(modifier: Modifier) {
+    val context = LocalContext.current
     var source by remember { mutableStateOf("") }
     var result by remember { mutableStateOf("") }
     var pair by remember { mutableStateOf(false) }
+    var listening by remember { mutableStateOf(false) }
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
+        if (uri != null) {
+            result = "Recognizing selected image…"
+            try {
+                val image = InputImage.fromFilePath(context, uri)
+                val recognizer = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
+                recognizer.process(image)
+                    .addOnSuccessListener { text ->
+                        source = text.text
+                        result = if (text.text.isBlank()) "No readable text found in this image." else "Image text loaded. Tap Translate."
+                        recognizer.close()
+                    }
+                    .addOnFailureListener { result = "Could not read this image."; recognizer.close() }
+            } catch (_: Exception) { result = "Could not open this image." }
+        }
+    }
+    val speechRecognizer = remember {
+        if (Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context))
+            SpeechRecognizer.createOnDeviceSpeechRecognizer(context) else null
+    }
+    DisposableEffect(speechRecognizer) {
+        if (speechRecognizer != null) speechRecognizer.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) { listening = true; result = "Listening on this device…" }
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() { listening = false }
+            override fun onError(error: Int) { listening = false; result = "On-device speech recognition failed. Check the device language pack and try again." }
+            override fun onResults(results: Bundle?) {
+                listening = false
+                source = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
+                result = if (source.isBlank()) "No speech recognized." else "Speech text loaded. Tap Translate."
+            }
+            override fun onPartialResults(partialResults: Bundle?) {}
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+        })
+        onDispose { speechRecognizer?.destroy() }
+    }
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted && speechRecognizer != null) {
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (pair) "zh-CN" else "en-US")
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+            }
+            speechRecognizer.startListening(intent)
+        } else result = "On-device speech recognition or microphone permission is unavailable."
+    }
     Column(modifier.fillMaxSize().padding(22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Translate", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Ink)
         Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(16.dp)).padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
@@ -118,7 +178,14 @@ private fun TranslateScreen(modifier: Modifier) {
             Icon(Icons.Default.SwapHoriz, null, tint = Muted)
             Text(if (pair) "English" else "中文", Modifier.clickable { pair = !pair }.padding(12.dp), fontWeight = FontWeight.SemiBold)
         }
-        OutlinedTextField(source, { source = it }, Modifier.fillMaxWidth().height(170.dp), placeholder = { Text("Type or paste text") }, shape = RoundedCornerShape(20.dp), trailingIcon = { IconButton(onClick = { source = "" }) { Icon(Icons.Default.Mic, "Voice input") } })
+        OutlinedTextField(source, { source = it }, Modifier.fillMaxWidth().height(170.dp), placeholder = { Text("Type, paste, or load text") }, shape = RoundedCornerShape(20.dp), trailingIcon = { IconButton(onClick = { source = "" }) { Icon(Icons.Default.Close, "Clear") } })
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(onClick = { photoPicker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, modifier = Modifier.weight(1f)) { Icon(Icons.Default.Image, null); Spacer(Modifier.width(6.dp)); Text("Choose photo") }
+            OutlinedButton(onClick = {
+                if (speechRecognizer == null) result = "This device does not provide on-device speech recognition."
+                else micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
+            }, modifier = Modifier.weight(1f), enabled = !listening) { Icon(Icons.Default.Mic, null); Spacer(Modifier.width(6.dp)); Text(if (listening) "Listening…" else "Speak") }
+        }
         Button(onClick = {
             if (source.isBlank()) result = "Enter some text to translate."
             else {
@@ -137,19 +204,18 @@ private fun TranslateScreen(modifier: Modifier) {
             }
         }, Modifier.fillMaxWidth().height(52.dp), colors = ButtonDefaults.buttonColors(containerColor = Ink), shape = RoundedCornerShape(16.dp)) { Icon(Icons.Default.Translate, null); Spacer(Modifier.width(8.dp)); Text("Translate") }
         if (result.isNotEmpty()) Text(result, Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(20.dp)).padding(18.dp), color = Ink, fontSize = 17.sp)
-        Text("More than 100 languages", color = Muted, fontSize = 13.sp)
+        Text("Translation runs with downloaded offline language models. Photo recognition processes only an image you select. Voice input uses on-device recognition when supported.", color = Muted, fontSize = 13.sp, lineHeight = 18.sp)
     }
 }
 
 @Composable
-private fun ChatScreen(modifier: Modifier) {
+private fun ChatScreen(modifier: Modifier, onSetup: () -> Unit) {
     Column(modifier.fillMaxSize().padding(22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Chat mode", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Ink)
-        Text("Read a conversation in your language as new messages arrive.", color = Muted)
-        Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(20.dp)).padding(18.dp), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("Chat mode", fontWeight = FontWeight.SemiBold); Text("Turn on only when you need it", color = Muted, fontSize = 13.sp) }; var on by remember { mutableStateOf(false) }; Switch(on, { on = it }) }
-        Text("HOW IT WORKS", color = Muted, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.sp)
-        listOf("1  Choose a supported chat app", "2  Grant notification access", "3  Read translated messages in the chat").forEach { Text(it, Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(15.dp)).padding(16.dp), color = Ink) }
-        Text("Chat mode is off until you turn it on. Android notification access is required for incoming message translation.", color = Muted, fontSize = 12.sp, lineHeight = 17.sp)
+        Text("Translate selected messages while you read or write in another app.", color = Muted)
+        Text("Drag the floating lens over a message to translate its accessibility text node. For replies, copy text into the Translate tab, translate it, then paste it back.", Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(20.dp)).padding(18.dp), color = Ink, lineHeight = 22.sp)
+        Button(onClick = onSetup, colors = ButtonDefaults.buttonColors(containerColor = Ink), shape = RoundedCornerShape(14.dp)) { Text("Set up Translate Lens") }
+        Text("The lens does not read notifications or scan the whole screen. Some apps do not expose their message text to Android Accessibility.", color = Muted, fontSize = 12.sp, lineHeight = 17.sp)
     }
 }
 
@@ -157,7 +223,7 @@ private fun ChatScreen(modifier: Modifier) {
 private fun SettingsScreen(modifier: Modifier) {
     Column(modifier.fillMaxSize().padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("Settings", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Ink)
-        listOf("Languages" to "English → 中文", "Floating bubble" to "Set up screen translation", "Privacy" to "Your text is sent only when you translate", "About" to "Swift Translate for Android · 0.1.0").forEach { (title, detail) ->
+        listOf("Languages" to "English ↔ 简体中文", "Floating bubble" to "Set up screen translation", "Privacy" to "Translation and selected-photo OCR run on device", "About" to "SwiftLens for Android · 0.2.0").forEach { (title, detail) ->
             Row(Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(17.dp)).padding(17.dp), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(title, fontWeight = FontWeight.SemiBold); Spacer(Modifier.height(3.dp)); Text(detail, color = Muted, fontSize = 12.sp) }; Icon(Icons.Default.ChevronRight, null, tint = Muted) }
         }
     }
@@ -165,5 +231,12 @@ private fun SettingsScreen(modifier: Modifier) {
 
 @Composable
 private fun FeatureDialog(feature: String, dismiss: () -> Unit) {
-    AlertDialog(onDismissRequest = dismiss, title = { Text(feature) }, text = { Text("This feature needs Android system access and a translation provider. This prototype maps the setup flow; connect the required service and permission screens to enable it.") }, confirmButton = { TextButton(onClick = dismiss) { Text("Got it") } })
+    val detail = when (feature) {
+        "Chat apps" -> "Open a supported app and drag Translate Lens over the message. The app must expose its text through Android Accessibility."
+        "Chat mode" -> "Use the floating lens on individual messages. SwiftLens does not read notifications or monitor a conversation in the background."
+        "Subtitles & audio" -> "Drag the lens over subtitles only when the video app exposes subtitle text as an accessibility node. Audio transcription is not enabled in this build."
+        else -> "Choose Photos & voice on the Translate tab to recognize a selected image or dictate with on-device speech recognition. No screen image is captured."
+    }
+    AlertDialog(onDismissRequest = dismiss, title = { Text(feature) }, text = { Text(detail) }, confirmButton = { TextButton(onClick = dismiss) { Text("Got it") } })
 }
+

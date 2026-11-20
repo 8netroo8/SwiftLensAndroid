@@ -27,5 +27,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.8.5")
     implementation("com.google.mlkit:translate:17.0.3")
+    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
+
