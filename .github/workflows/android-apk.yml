@@ -51,7 +51,7 @@ jobs:
   screenshots:
     name: Capture UI previews
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: macos-15
     steps:
       - name: Download APK
         uses: actions/download-artifact@v4
@@ -65,14 +65,14 @@ jobs:
           packages: 'platform-tools emulator'
 
       - name: Install Android 16 emulator image
-        run: sdkmanager "platforms;android-36" "system-images;android-36;google_apis;x86_64" "emulator"
+        run: sdkmanager "platforms;android-36" "system-images;android-36;google_apis;arm64-v8a" "emulator"
 
       - name: Capture app pages
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 36
           target: google_apis
-          arch: x86_64
+          arch: arm64-v8a
           profile: pixel_6
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
           script: |
