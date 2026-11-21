@@ -66,7 +66,7 @@ def navbar(d, active="Home"):
         bb=d.textbbox((0,0),label,font=font(11)); d.text((x-8,1160),label,font=font(11),fill=col)
 
 def page_home():
-    im,d=base("Home","SwiftLens","Translate messages, text and speech.",True)
+    im,d=base("Home","Translate Len","Translate messages, text and speech.",True)
     card(d,150,300,BLUE)
     text(d,44,176,"TRANSLATE ANYWHERE",12,"#DCE9FF",True)
     text(d,44,216,"Understand every",27,WHITE,True); text(d,44,251,"conversation.",27,WHITE,True)
@@ -93,25 +93,25 @@ def page_translate():
     navbar(d,"Translate"); return im
 
 def page_lens():
-    im,d=base("Lens","Screen translator","Translate text inside other apps with a floating lens.",True)
+    im,d=base("Lens","Translate Lens","Translate text inside other apps with a floating lens.",True)
     card(d,166,474); rr(d,(231,196,309,274),PALE,39); text(d,251,211,"L",37,BLUE,True)
     text(d,142,303,"Translate Lens",21,NAVY,True)
-    wrap(d,52,346,"Drag the bubble onto a message, post or subtitle. SwiftLens reads the nearest accessibility text node and shows the translation beside it.",436,14,MUTED)
+    wrap(d,52,346,"Drag the lens onto a message, post or subtitle. Translate Len reads the nearest accessibility text node and shows the translation beside it.",436,14,MUTED)
     button(d,500,"Enable Accessibility Service",x=42,w=456)
     button(d,568,"View setup steps",x=42,w=456,fill=WHITE,fg=BLUE)
     card(d,668,158); text(d,42,686,"D",22,BLUE,True); text(d,82,687,"Offline language models",16,NAVY,True); text(d,82,714,"English + Chinese · Wi-Fi download",12,MUTED)
-    rr(d,(82,750,300,790),PALE,10); text(d,103,761,"Manage packs in SwiftLens",12,BLUE,True)
+    rr(d,(82,750,300,790),PALE,10); text(d,103,761,"Manage packs in app settings",12,BLUE,True)
     wrap(d,24,834,"Canvas-rendered, image-only and protected text may not be available through Accessibility.",480,13,MUTED)
     navbar(d,"Lens"); return im
 
 def page_setup():
-    im,d=base("Setup","Set up Translate Lens","Allow SwiftLens to read only the text you point the lens at.")
-    lines=["Open Accessibility settings","Choose SwiftLens and turn it on","Return here, then drag the floating lens onto text"]
+    im,d=base("Setup","Set up Translate Lens","Allow Translate Len to read only the text you point the lens at.")
+    lines=["Open Accessibility settings","Choose Translate Len Lens and turn it on","Return here, then drag the floating lens onto text"]
     y=170
     for i,line in enumerate(lines,1):
         card(d,y,105); rr(d,(40,y+32,76,y+68),PALE,18); text(d,52,y+39,str(i),17,BLUE,True); wrap(d,94,y+34,line,395,15,NAVY,True); y+=125
     button(d,580,"Open Accessibility settings"); text(d,169,653,"I’ll do this later",15,BLUE,True)
-    card(d,716,110); wrap(d,42,741,"SwiftLens does not use MediaProjection, screen recording or screenshots.",450,14,MUTED)
+    card(d,716,110); wrap(d,42,741,"Translate Len does not use MediaProjection, screen recording or screenshots.",450,14,MUTED)
     return im
 
 def page_photo():
@@ -123,12 +123,14 @@ def page_photo():
     text(d,220,946,"Back to home",14,BLUE,True); return im
 
 def page_voice():
-    im,d=base("Voice","Voice translator","Speak and translate with on-device speech recognition.")
-    card(d,174,440); text(d,183,203,"English > 简体中文",15,BLUE,True)
-    rr(d,(220,292,320,392),BLUE,50); text(d,257,318,"V",40,WHITE,True)
-    text(d,209,424,"Tap to speak",17,NAVY,True); text(d,147,462,"Tap the microphone to dictate.",13,MUTED)
-    wrap(d,24,666,"Microphone permission is requested when you tap the microphone. Audio recognition stays on device when supported.",480,13,MUTED)
-    text(d,220,824,"Back to home",14,BLUE,True); return im
+    im,d=base("Voice","Voice translation","Speak, review the transcript, then translate offline.")
+    card(d,174,565); text(d,183,203,"English > 简体中文",15,BLUE,True)
+    rr(d,(68,266,278,316),BLUE,14); text(d,125,280,"Speak",16,WHITE,True)
+    rr(d,(294,266,472,316),WHITE,14,outline="#DCE3EC",width=2); text(d,349,280,"Clear",15,NAVY,True)
+    rr(d,(42,338,498,520),WHITE,15,outline="#DCE3EC",width=2); wrap(d,58,357,"Recognized speech appears here and can be edited before translation.",420,15,MUTED)
+    rr(d,(42,540,498,588),BLUE,14); text(d,183,556,"Translate offline",15,WHITE,True)
+    wrap(d,24,786,"Speech runs on device when supported. Otherwise, the device speech service may use a network and asks for confirmation first.",480,13,MUTED)
+    text(d,220,900,"Manage offline language models",13,BLUE,True); return im
 
 def page_chat():
     im,d=base("Chat","Chat translator","Use the floating lens inside your messaging apps.")
@@ -143,13 +145,13 @@ def page_chat():
 def page_subtitles():
     im,d=base("Subtitles","Subtitle translator","Translate captions when the video app exposes their text.")
     card(d,174,360); text(d,42,201,"S",34,BLUE,True); text(d,42,260,"Point the lens at a caption",20,NAVY,True)
-    wrap(d,42,310,"Open a video with accessible captions, enable Translate Lens, then drag it onto a caption. SwiftLens reads the caption node exposed by that app.",445,15,MUTED)
+    wrap(d,42,310,"Open a video with accessible captions, enable Translate Lens, then drag it onto a caption. Translate Len reads the caption node exposed by that app.",445,15,MUTED)
     wrap(d,42,432,"Video audio transcription and screen capture are not part of this build.",440,13,MUTED)
     button(d,578,"Set up Translate Lens"); return im
 
 def page_settings():
     im,d=base("Settings","Settings",None,True)
-    rows=[("L","Translation languages","English > 简体中文"),("L","Translate Lens","Accessibility and floating bubble"),("D","Offline models","Select language packs"),("P","Privacy","How SwiftLens reads and translates text"),("i","About","SwiftLens for Android · 0.6.0")]
+    rows=[("L","Translation languages","English > 简体中文"),("L","Translate Lens","Accessibility and floating bubble"),("D","Offline models","Select language packs"),("P","Privacy","How Translate Len reads text"),("i","About","Translate Len · 0.7.0 · 8netroo8")]
     y=157
     for icon,title,note in rows:
         card(d,y,88); text(d,39,y+28,icon,24,BLUE,True); text(d,84,y+16,title,15,NAVY,True); text(d,84,y+46,note,11,MUTED); text(d,480,y+25,"›",24,MUTED); y+=101
@@ -172,19 +174,19 @@ def page_privacy():
     text(d,42,344,"On-device processing",16,NAVY,True)
     wrap(d,42,382,"Downloaded translation models and selected-photo OCR run on device. Speech recognition uses the on-device recognizer when available.",440,14,MUTED)
     text(d,42,490,"No display capture",16,NAVY,True)
-    wrap(d,42,528,"SwiftLens does not use MediaProjection, screen recording or screenshots. It includes no ads or billing.",440,14,MUTED)
+    wrap(d,42,528,"Translate Len does not use MediaProjection, screen recording or screenshots. It includes no ads or billing.",440,14,MUTED)
     text(d,24,650,"Accessibility can expose sensitive text. Enable the service only if you want to use Translate Lens.",14,MUTED)
     navbar(d,"Settings"); return im
 
 def page_about():
-    im,d=base("About","About SwiftLens",None,True)
+    im,d=base("About","About Translate Len",None,True)
     card(d,166,270)
     rr(d,(228,198,312,282),PALE,42); text(d,254,219,"L",37,BLUE,True)
-    text(d,208,309,"SwiftLens for Android",20,NAVY,True)
-    text(d,212,345,"Version 0.6.0 · Android 16 target",13,MUTED)
+    text(d,208,309,"Translate Len for Android",20,NAVY,True)
+    text(d,212,345,"Version 0.7.0 · Android 16 target",13,MUTED)
     card(d,462,150)
     text(d,42,486,"English <-> 简体中文",16,NAVY,True)
-    wrap(d,42,528,"Text, photo, voice and Accessibility-based Translate Lens.",440,14,MUTED)
+    wrap(d,42,528,"Text, photo, voice and Accessibility-based Translate Lens.\nDeveloper: 8netroo8",440,14,MUTED)
     text(d,24,662,"Offline model download requires an initial Wi-Fi connection.",13,MUTED)
     navbar(d,"Settings"); return im
 
@@ -210,9 +212,8 @@ def page_idle_lens():
         text(d,96,y+18,name,14,NAVY,True)
         wrap(d,96,y+50,message,380,15,NAVY)
         text(d,96,y+101,"9:41 AM",11,MUTED)
-    rr(d,(496,684,540,714),"#B9F27C",15)
-    text(d,510,690,"译",15,NAVY,True)
-    text(d,24,755,"Touch the tab to expand it, or drag it onto text.",13,MUTED)
+    rr(d,(516,660,540,736),"#E1E5EB",12)
+    text(d,24,755,"The translucent white vertical tab stays parallel to the phone edge. Drag to translate.",13,MUTED)
     return im
 
 def modal_background(page):
@@ -222,31 +223,24 @@ def modal_background(page):
 
 def page_method():
     im=modal_background(page_translate); d=ImageDraw.Draw(im)
-    rr(d,(34,300,506,850),WHITE,24)
-    text(d,58,326,"Choose translation method",22,NAVY,True)
-    text(d,58,367,"Offline stays on this device. Online opens a",13,MUTED); text(d,58,389,"provider you choose.",13,MUTED)
-    for y,label,selected in [(444,"Offline · ML Kit (on device)",True),(510,"Online · provider website",False)]:
+    rr(d,(34,360,506,735),WHITE,24)
+    text(d,58,386,"Choose translation method",22,NAVY,True)
+    text(d,58,404,"Offline runs on this device. Online API is pending",13,MUTED); text(d,58,426,"your provider choice in Codex; no website opens.",13,MUTED)
+    for y,label,selected in [(488,"Offline · ML Kit (on device)",True),(554,"Online · API not configured",False)]:
         d.ellipse((61,y,83,y+22),outline=BLUE if selected else MUTED,width=2)
         if selected: d.ellipse((67,y+6,77,y+16),fill=BLUE)
         text(d,96,y,label,15,NAVY,True)
-    text(d,60,582,"ONLINE PLATFORM",11,MUTED,True)
-    for y,label,checked in [(619,"Google Translate",True),(671,"DeepL",False),(723,"Microsoft Bing Translator",False)]:
-        d.ellipse((64,y,84,y+20),outline=BLUE if checked else MUTED,width=2)
-        if checked: d.ellipse((69,y+5,79,y+15),fill=BLUE)
-        text(d,97,y,label,14,NAVY)
-    rr(d,(62,782,236,830),"#F0F3F7",14); text(d,119,797,"Cancel",14,BLUE,True)
-    rr(d,(252,782,478,830),BLUE,14); text(d,324,797,"Continue",14,WHITE,True)
+    wrap(d,58,615,"Choose an API provider in Codex before using online translation. Text is not sent until an in-app provider is connected.",408,14,MUTED)
+    rr(d,(62,670,236,718),"#F0F3F7",14); text(d,119,685,"Cancel",14,BLUE,True)
+    rr(d,(252,670,478,718),BLUE,14); text(d,324,685,"Continue",14,WHITE,True)
     return im
 
 def page_consent():
     im=modal_background(page_translate); d=ImageDraw.Draw(im)
     rr(d,(34,360,506,810),WHITE,24)
-    text(d,58,391,"Open Google Translate?",21,NAVY,True)
-    wrap(d,58,443,"The text you entered will be placed in Google Translate and may be sent to that provider for online processing. SwiftLens will not send it until you confirm here.",410,15,MUTED)
-    rr(d,(58,555,482,625),"#F4F7FB",14)
-    text(d,74,577,"Text: How are you?",14,NAVY)
-    rr(d,(62,727,227,777),"#F0F3F7",14); text(d,119,743,"Back",14,BLUE,True)
-    rr(d,(245,727,482,777),BLUE,14); text(d,293,743,"Agree & open",14,WHITE,True)
+    text(d,58,391,"Online translation pending",21,NAVY,True)
+    wrap(d,58,443,"No translation website is opened and no text is sent. Choose an API platform in Codex; the app will then call that provider directly after confirmation.",410,15,MUTED)
+    rr(d,(62,727,482,777),BLUE,14); text(d,220,743,"Understood",14,WHITE,True)
     return im
 
 pages={"Home":page_home,"Translate":page_translate,"Method":page_method,"Online consent":page_consent,"Lens":page_lens,"Models":page_models,"Idle lens":page_idle_lens,"Setup":page_setup,"Photo":page_photo,"Voice":page_voice,"Chat":page_chat,"Subtitles":page_subtitles,"Settings":page_settings,"Languages":page_languages,"Privacy":page_privacy,"About":page_about}
@@ -264,4 +258,3 @@ for idx,(name,im) in enumerate(thumbs):
     sheet.paste(im,(x,y+25)); sd.text((x+10,y+4),name,font=font(14,True),fill=NAVY)
 sd.text((10,2050),"Layout render preview · not an Android device screenshot",font=font(12),fill=MUTED)
 sheet.save(OUT/"ContactSheet.png")
-

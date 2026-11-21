@@ -5,7 +5,6 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
-import android.content.Intent
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -51,7 +50,6 @@ class TranslateLensService : AccessibilityService() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         targetEnglish = getSharedPreferences("lens", MODE_PRIVATE).getBoolean("english_to_chinese", true)
         showBubble()
-        refreshModelState()
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
@@ -65,7 +63,7 @@ class TranslateLensService : AccessibilityService() {
             gravity = Gravity.CENTER
             background = rounded(Color.rgb(185, 242, 124), dp(30).toFloat())
             elevation = dp(8).toFloat()
-            contentDescription = "Translate Lens. Drag over text to translate. Tap to open language and offline model settings."
+            contentDescription = "Translate Len. Drag this lens over text to translate. Configure languages and translation in the app."
         }
         bubbleParams = WindowManager.LayoutParams(dp(58), dp(58), WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
@@ -99,10 +97,7 @@ class TranslateLensService : AccessibilityService() {
                         val x = bubbleParams.x + bubbleParams.width / 2
                         val y = bubbleParams.y + bubbleParams.height / 2
                         translateTextAt(x, y)
-                    } else {
-                        showLensMenu()
-                        scheduleCompact(7000)
-                    }
+                    } else scheduleCompact(3500)
                     true
                 }
                 MotionEvent.ACTION_CANCEL -> { scheduleCompact(1200); true }
@@ -136,8 +131,9 @@ class TranslateLensService : AccessibilityService() {
         view.text = "译"
         view.textSize = 18f
         view.alpha = 1f
+        view.background = rounded(Color.rgb(185, 242, 124), dp(30).toFloat())
         view.elevation = dp(8).toFloat()
-        view.contentDescription = "Translate Lens. Drag over text to translate. Tap to open language and offline model settings."
+        view.contentDescription = "Translate Len. Drag this lens over text to translate. Configure languages and translation in the app."
         runCatching { windowManager.updateViewLayout(view, bubbleParams) }
     }
 
@@ -146,19 +142,20 @@ class TranslateLensService : AccessibilityService() {
         if (compact) return
         val (screenW, screenH) = screenSize()
         compactOnLeft = bubbleParams.x + bubbleParams.width / 2 < screenW / 2
-        val newWidth = dp(46)
-        val newHeight = dp(28)
+        // Dock as a slim vertical tab, parallel to the phone's left/right frame.
+        val newWidth = dp(22)
+        val newHeight = dp(74)
         val oldCenterY = bubbleParams.y + bubbleParams.height / 2
         compact = true
         bubbleParams.width = newWidth
         bubbleParams.height = newHeight
         bubbleParams.x = if (compactOnLeft) 0 else max(0, screenW - newWidth)
         bubbleParams.y = (oldCenterY - newHeight / 2).coerceIn(0, max(0, screenH - newHeight))
-        view.text = "译"
-        view.textSize = 14f
+        view.text = ""
+        view.background = rounded(Color.WHITE, dp(18).toFloat())
         view.alpha = 0.58f
         view.elevation = dp(3).toFloat()
-        view.contentDescription = "Translate Lens minimized at screen edge. Tap to expand or drag onto text."
+        view.contentDescription = "Translate Len minimized as a translucent white tab at the phone edge. Drag onto text to translate."
         runCatching { windowManager.updateViewLayout(view, bubbleParams) }
     }
 
@@ -171,50 +168,6 @@ class TranslateLensService : AccessibilityService() {
         return resources.displayMetrics.widthPixels to resources.displayMetrics.heightPixels
     }
 
-    private fun showLensMenu() {
-        removePanel()
-        val body = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(14), dp(18), dp(14))
-            background = rounded(Color.WHITE, dp(18).toFloat())
-            elevation = dp(12).toFloat()
-        }
-        body.addView(label("Translate Lens", 18, Color.rgb(24, 34, 31), true))
-        body.addView(label("Drag the bubble onto a text node to translate it.", 13, Color.DKGRAY).apply { setPadding(0, dp(5), 0, dp(10)) })
-        val direction = label("", 15, Color.rgb(24, 34, 31), true).apply {
-            setPadding(0, dp(10), 0, dp(10))
-            setOnClickListener { targetEnglish = !targetEnglish; getSharedPreferences("lens", MODE_PRIVATE).edit().putBoolean("english_to_chinese", targetEnglish).apply(); showLensMenu(); scheduleCompact(7000) }
-        }
-        body.addView(direction)
-        val modelStatus = label("Checking offline models…", 12, Color.DKGRAY)
-        body.addView(modelStatus)
-        val action = label("Manage English and Chinese packs in SwiftLens", 14, Color.rgb(30, 90, 45), true).apply {
-            setPadding(0, dp(12), 0, dp(8))
-            setOnClickListener {
-                removePanel()
-                scheduleCompact(800)
-                startActivity(Intent(this@TranslateLensService, MainActivity::class.java)
-                    .putExtra("preview_page", "Models")
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            }
-        }
-        body.addView(action)
-        body.addView(label("Tap this panel to close", 11, Color.GRAY).apply { setPadding(0, dp(8), 0, 0); setOnClickListener { removePanel(); scheduleCompact(600) } })
-        panel = body
-        val (screenW, screenH) = screenSize()
-        val x = if (bubbleParams.x < screenW / 2) bubbleParams.x else screenW - bubbleParams.x - dp(300)
-        val y = (bubbleParams.y + bubbleParams.height + dp(8)).coerceIn(0, screenH - dp(260))
-        val params = WindowManager.LayoutParams(dp(280), WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.START; this.x = x.coerceAtLeast(0); this.y = y }
-        windowManager.addView(body, params)
-        direction.text = directionText()
-        refreshModelState(modelStatus)
-    }
-
-    private fun directionText() = if (targetEnglish) "English  →  简体中文    ⇄" else "简体中文  →  English    ⇄"
-
     private fun label(textValue: String, size: Int, color: Int, bold: Boolean = false) = TextView(this).apply {
         text = textValue; textSize = size.toFloat(); setTextColor(color)
         if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
@@ -222,6 +175,7 @@ class TranslateLensService : AccessibilityService() {
 
     private fun translateTextAt(x: Int, y: Int) {
         if (busy) return
+        targetEnglish = getSharedPreferences("lens", MODE_PRIVATE).getBoolean("english_to_chinese", true)
         val sourceIsEnglish = targetEnglish
         val nodeText = findTextNodeAt(x, y)
         if (nodeText.isNullOrBlank()) {
@@ -235,51 +189,19 @@ class TranslateLensService : AccessibilityService() {
         removePanel()
         val body = panelContainer()
         body.addView(label("Choose translation method", 18, Color.rgb(24, 34, 31), true))
-        body.addView(label("Offline stays on this device. Online opens a provider you choose.", 13, Color.DKGRAY).apply { setPadding(0, dp(5), 0, dp(8)) })
+        body.addView(label("Choose on-device offline translation. Online API providers will be added after you select one in Codex.", 13, Color.DKGRAY).apply { setPadding(0, dp(5), 0, dp(8)) })
         val methods = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
         val offline = RadioButton(this).apply { text = "Offline · ML Kit (on device)"; id = 1; isChecked = true }
-        val online = RadioButton(this).apply { text = "Online · open translation platform"; id = 2 }
+        val online = RadioButton(this).apply { text = "Online · provider not configured"; id = 2; isEnabled = false }
         methods.addView(offline); methods.addView(online); body.addView(methods)
-        body.addView(label("ONLINE PLATFORM", 11, Color.GRAY, true).apply { setPadding(dp(4), dp(5), 0, dp(3)) })
-        val providers = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
-        val options = OnlineProvider.entries.mapIndexed { index, provider ->
-            RadioButton(this).apply { text = provider.label; id = 10 + index }
-        }
-        options.forEach { providers.addView(it) }
-        providers.check(10)
-        body.addView(providers)
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END; setPadding(0, dp(8), 0, 0) }
         actions.addView(actionLabel("Cancel", false) { removePanel(); scheduleCompact() })
         actions.addView(actionLabel("Continue", true) {
-            if (methods.checkedRadioButtonId == online.id) {
-                val selectedIndex = (providers.checkedRadioButtonId - 10).takeIf { it in OnlineProvider.entries.indices } ?: 0
-                val chosen = OnlineProvider.entries[selectedIndex]
-                showOnlineConfirmation(original, sourceIsEnglish, chosen)
-            } else {
-                removePanel()
-                translateOffline(original, sourceIsEnglish)
-            }
+            removePanel()
+            translateOffline(original, sourceIsEnglish)
         })
         body.addView(actions)
         showOverlayPanel(body, 320, 410)
-    }
-
-    private fun showOnlineConfirmation(original: String, sourceIsEnglish: Boolean, provider: OnlineProvider) {
-        removePanel()
-        val body = panelContainer()
-        body.addView(label("Open ${provider.label}?", 18, Color.rgb(24, 34, 31), true))
-        body.addView(label("The selected text will be placed in ${provider.label} and may be sent to that provider for online processing. SwiftLens will not send it until you confirm here.", 14, Color.DKGRAY).apply { setPadding(0, dp(8), 0, dp(8)) })
-        body.addView(label("Text: ${original.take(160)}${if (original.length > 160) "…" else ""}", 12, Color.GRAY).apply { setPadding(0, dp(4), 0, dp(8)) })
-        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END; setPadding(0, dp(8), 0, 0) }
-        actions.addView(actionLabel("Back", false) { showTranslationChoice(original, sourceIsEnglish) })
-        actions.addView(actionLabel("Agree & open", true) {
-            removePanel()
-            runCatching { OnlineTranslation.open(this, provider, sourceIsEnglish, original) }
-                .onFailure { showResult(original, "Could not open ${provider.label}. Check that a browser is installed.", sourceIsEnglish) }
-            scheduleCompact(1200)
-        })
-        body.addView(actions)
-        showOverlayPanel(body, 320, 330)
     }
 
     private fun panelContainer() = LinearLayout(this).apply {
@@ -379,16 +301,6 @@ class TranslateLensService : AccessibilityService() {
         return sqrt((dx * dx + dy * dy).toDouble()).toInt()
     }
 
-    private fun refreshModelState(target: TextView? = null) {
-        val manager = RemoteModelManager.getInstance()
-        manager.isModelDownloaded(englishModel).addOnSuccessListener { en ->
-            manager.isModelDownloaded(chineseModel).addOnSuccessListener { zh ->
-                val state = "English: ${if (en) "ready" else "not downloaded"} · Chinese: ${if (zh) "ready" else "not downloaded"}"
-                target?.post { target.text = state }
-            }
-        }
-    }
-
     private fun showResult(original: String, translated: String, englishToChinese: Boolean) {
         bubble?.post { bubble?.text = "译" }
         removePanel()
@@ -419,4 +331,4 @@ class TranslateLensService : AccessibilityService() {
     override fun onInterrupt() = Unit
     override fun onDestroy() { mainHandler.removeCallbacks(compactRunnable); removePanel(); bubble?.let { try { windowManager.removeView(it) } catch (_: Exception) { } }; super.onDestroy() }
 }
-
+import com.google.mlkit.common.model.RemoteModelManager
