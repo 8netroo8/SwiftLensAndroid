@@ -61,7 +61,7 @@ private fun SwiftLensApp(initialPage: String) {
     var draft by remember { mutableStateOf("") }
     var englishToChinese by remember { mutableStateOf(true) }
     val rootPages = setOf("Home", "Translate", "Lens", "Settings")
-    BackHandler(page !in rootPages) { page = "Home" }
+    BackHandler(page !in rootPages) { page = if (page == "Models") "Settings" else "Home" }
     MaterialTheme(colorScheme = lightColorScheme(primary = Blue, background = Page, surface = Color.White)) {
         Scaffold(containerColor = Page, bottomBar = {
             if (page in rootPages) NavigationBar(containerColor = Color.White) {
@@ -76,6 +76,7 @@ private fun SwiftLensApp(initialPage: String) {
                 "Translate" -> TranslatePage(modifier, draft, { draft = it }, englishToChinese, { englishToChinese = !englishToChinese }, { page = it })
                 "Lens" -> LensPage(modifier, { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }, { page = it })
                 "Settings" -> SettingsPage(modifier, { page = it }, englishToChinese)
+                "Models" -> OfflineModelsPage(modifier)
                 "Languages" -> LanguagePage(modifier, englishToChinese, { englishToChinese = it; page = "Settings" })
                 "Setup" -> SetupPage(modifier, { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }, { page = "Lens" })
                 "Photo" -> PhotoPage(modifier, { draft = it; page = "Translate" }, { page = "Home" })
@@ -83,7 +84,7 @@ private fun SwiftLensApp(initialPage: String) {
                 "Chat" -> ChatPage(modifier, { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) })
                 "Subtitles" -> SubtitlePage(modifier, { page = "Setup" })
                 "Privacy" -> InfoPage(modifier, "Privacy", "Offline translation and selected-photo OCR run on this device after model setup. If you choose an online provider, SwiftLens shows the selected platform and asks you to confirm before opening it with your text. The provider processes text under its own privacy terms. The lens reads only the accessibility text node near your drop point. No display capture, notifications, ads, or billing are used.") { page = "Settings" }
-                "About" -> InfoPage(modifier, "About SwiftLens", "SwiftLens for Android · English ↔ Simplified Chinese · Android 16 target · v0.4.0") { page = "Settings" }
+                "About" -> InfoPage(modifier, "About SwiftLens", "SwiftLens for Android · English ↔ Simplified Chinese · Android 16 target · v0.5.0") { page = "Settings" }
                 else -> HomePage(modifier, { page = it })
             }
         }
@@ -244,13 +245,13 @@ private fun LensPage(modifier: Modifier, setup: () -> Unit, open: (String) -> Un
                 OutlinedButton(onClick = { open("Setup") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text("View setup steps") }
             }
         }
-        ModelCard()
+        ModelCard { open("Models") }
         Text("Canvas-rendered, image-only and protected text may not be available through Accessibility.", color = Secondary, fontSize = 12.sp, lineHeight = 17.sp)
     }
 }
 
 @Composable
-private fun ModelCard() {
+private fun ModelCard(openManager: () -> Unit) {
     val manager = remember { RemoteModelManager.getInstance() }
     val englishModel = remember { TranslateRemoteModel.Builder(TranslateLanguage.ENGLISH).build() }
     val chineseModel = remember { TranslateRemoteModel.Builder(TranslateLanguage.CHINESE).build() }
@@ -264,24 +265,98 @@ private fun ModelCard() {
     Surface(color = Color.White, shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.CloudDownload, null, tint = Blue); Spacer(Modifier.width(10.dp)); Column { Text("Offline language model", color = Navy, fontWeight = FontWeight.SemiBold); Text(status, color = Secondary, fontSize = 12.sp) } }
-            Text("Download both language packs over Wi-Fi for offline use in either direction.", color = Secondary, fontSize = 12.sp, lineHeight = 17.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = {
-                    status = "Downloading English model…"
-                    manager.download(englishModel, com.google.mlkit.common.model.DownloadConditions.Builder().requireWifi().build())
-                        .addOnSuccessListener {
-                            status = "Downloading Chinese model…"
-                            manager.download(chineseModel, com.google.mlkit.common.model.DownloadConditions.Builder().requireWifi().build())
-                                .addOnSuccessListener { status = "Both models ready for offline translation." }
-                                .addOnFailureListener { status = "Chinese model download failed. Check Wi-Fi and retry." }
-                        }.addOnFailureListener { status = "English model download failed. Check Wi-Fi and retry." }
-                }) { Text("Download both") }
-                TextButton(onClick = {
-                    manager.deleteDownloadedModel(englishModel).addOnSuccessListener {
-                        manager.deleteDownloadedModel(chineseModel).addOnSuccessListener { status = "Offline models removed." }.addOnFailureListener { status = "Could not remove Chinese model." }
-                    }.addOnFailureListener { status = "Could not remove English model." }
-                }) { Text("Remove") }
+            Text("Choose which language packs to download or remove.", color = Secondary, fontSize = 12.sp, lineHeight = 17.sp)
+            TextButton(onClick = openManager, contentPadding = PaddingValues(0.dp)) { Text("Manage offline models") }
+        }
+    }
+}
+
+@Composable
+private fun OfflineModelsPage(modifier: Modifier) {
+    val manager = remember { RemoteModelManager.getInstance() }
+    val englishModel = remember { TranslateRemoteModel.Builder(TranslateLanguage.ENGLISH).build() }
+    val chineseModel = remember { TranslateRemoteModel.Builder(TranslateLanguage.CHINESE).build() }
+    val conditions = remember { com.google.mlkit.common.model.DownloadConditions.Builder().requireWifi().build() }
+    var englishReady by remember { mutableStateOf(false) }
+    var chineseReady by remember { mutableStateOf(false) }
+    var englishSelected by remember { mutableStateOf(true) }
+    var chineseSelected by remember { mutableStateOf(true) }
+    var working by remember { mutableStateOf(false) }
+    var status by remember { mutableStateOf("Checking installed language packs…") }
+
+    fun refreshModels() {
+        manager.isModelDownloaded(englishModel).addOnSuccessListener { englishReady = it
+            manager.isModelDownloaded(chineseModel).addOnSuccessListener { chineseReady = it
+                status = if (englishReady && chineseReady) "Both packs are ready. Offline translation works in either direction." else "Select one or both packs below. The pair needs both packs to translate offline."
+            }.addOnFailureListener { status = "Could not check the Chinese pack." }
+        }.addOnFailureListener { status = "Could not check the English pack." }
+    }
+    LaunchedEffect(Unit) { refreshModels() }
+
+    fun downloadSelected() {
+        val selected = buildList {
+            if (englishSelected && !englishReady) add(englishModel to "English")
+            if (chineseSelected && !chineseReady) add(chineseModel to "Simplified Chinese")
+        }
+        if (selected.isEmpty()) { status = "Select a pack that is not already installed."; return }
+        working = true
+        fun downloadAt(index: Int) {
+            if (index >= selected.size) { working = false; refreshModels(); return }
+            val (model, language) = selected[index]
+            status = "Downloading $language pack over Wi-Fi…"
+            manager.download(model, conditions)
+                .addOnSuccessListener { status = "$language pack installed."; downloadAt(index + 1) }
+                .addOnFailureListener { error -> working = false; status = "$language download failed: ${error.localizedMessage ?: "check Wi-Fi and retry"}"; refreshModels() }
+        }
+        downloadAt(0)
+    }
+
+    fun removeSelected() {
+        val selected = buildList {
+            if (englishSelected && englishReady) add(englishModel to "English")
+            if (chineseSelected && chineseReady) add(chineseModel to "Simplified Chinese")
+        }
+        if (selected.isEmpty()) { status = "Select an installed pack to remove."; return }
+        working = true
+        fun removeAt(index: Int) {
+            if (index >= selected.size) { working = false; refreshModels(); return }
+            val (model, language) = selected[index]
+            status = "Removing $language pack…"
+            manager.deleteDownloadedModel(model)
+                .addOnSuccessListener { status = "$language pack removed."; removeAt(index + 1) }
+                .addOnFailureListener { error -> working = false; status = "$language removal failed: ${error.localizedMessage ?: "try again"}"; refreshModels() }
+        }
+        removeAt(0)
+    }
+
+    PageFrame(modifier, "Offline models", "Select individual language packs for offline English ↔ Simplified Chinese translation.") {
+        ModelSelectionRow("English", "English model", englishReady, englishSelected, !working) { englishSelected = it }
+        ModelSelectionRow("简体中文", "Simplified Chinese model", chineseReady, chineseSelected, !working) { chineseSelected = it }
+        Surface(color = Color.White, shape = RoundedCornerShape(16.dp)) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(if (englishReady && chineseReady) "Offline translation ready" else "Both packs are needed for this language pair", color = Navy, fontWeight = FontWeight.SemiBold)
+                Text("Downloads require Wi-Fi. Translation runs locally after installation; downloaded packs are stored on this device.", color = Secondary, fontSize = 12.sp, lineHeight = 17.sp)
+                if (working) LinearProgressIndicator(Modifier.fillMaxWidth())
+                Text(status, color = Secondary, fontSize = 12.sp, lineHeight = 17.sp)
             }
+        }
+        Button(onClick = ::downloadSelected, enabled = !working, modifier = Modifier.fillMaxWidth().height(50.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue), shape = RoundedCornerShape(14.dp)) {
+            Icon(Icons.Default.CloudDownload, null); Spacer(Modifier.width(8.dp)); Text("Download selected packs")
+        }
+        OutlinedButton(onClick = ::removeSelected, enabled = !working, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(14.dp)) {
+            Icon(Icons.Default.DeleteOutline, null); Spacer(Modifier.width(8.dp)); Text("Remove selected packs")
+        }
+        Text("You can download or remove either pack independently. Keep both installed to use offline translation in both directions.", color = Secondary, fontSize = 12.sp, lineHeight = 17.sp)
+    }
+}
+
+@Composable
+private fun ModelSelectionRow(label: String, detail: String, ready: Boolean, selected: Boolean, enabled: Boolean, onSelected: (Boolean) -> Unit) {
+    Surface(color = Color.White, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = selected, onCheckedChange = onSelected, enabled = enabled)
+            Column(Modifier.weight(1f)) { Text(label, color = Navy, fontWeight = FontWeight.SemiBold); Text(detail, color = Secondary, fontSize = 12.sp) }
+            Text(if (ready) "Downloaded" else "Not installed", color = if (ready) Color(0xFF27834A) else Secondary, fontSize = 11.sp)
         }
     }
 }
@@ -401,9 +476,9 @@ private fun SettingsPage(modifier: Modifier, open: (String) -> Unit, enToZh: Boo
     PageFrame(modifier, "Settings") {
         SettingsRow("Translation languages", if (enToZh) "English → 简体中文" else "简体中文 → English", Icons.Default.Language) { open("Languages") }
         SettingsRow("Translate Lens", "Accessibility and floating bubble", Icons.Default.Lens) { open("Lens") }
-        SettingsRow("Offline models", "Download or remove language models", Icons.Default.CloudDownload) { open("Lens") }
+        SettingsRow("Offline models", "Choose and manage language packs", Icons.Default.CloudDownload) { open("Models") }
         SettingsRow("Privacy", "How SwiftLens reads and translates text", Icons.Default.Security) { open("Privacy") }
-        SettingsRow("About", "SwiftLens for Android · 0.4.0", Icons.Default.Info) { open("About") }
+        SettingsRow("About", "SwiftLens for Android · 0.5.0", Icons.Default.Info) { open("About") }
         Text("No ads · No billing · No screen capture", color = Secondary, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
     }
 }

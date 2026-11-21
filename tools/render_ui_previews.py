@@ -100,8 +100,7 @@ def page_lens():
     button(d,500,"Enable Accessibility Service",x=42,w=456)
     button(d,568,"View setup steps",x=42,w=456,fill=WHITE,fg=BLUE)
     card(d,668,158); text(d,42,686,"D",22,BLUE,True); text(d,82,687,"Offline language models",16,NAVY,True); text(d,82,714,"English + Chinese · Wi-Fi download",12,MUTED)
-    rr(d,(82,750,220,786),PALE,10); text(d,100,759,"Download both",12,BLUE,True)
-    text(d,244,759,"Remove",12,BLUE,True)
+    rr(d,(82,750,300,790),PALE,10); text(d,103,761,"Manage packs in SwiftLens",12,BLUE,True)
     wrap(d,24,834,"Canvas-rendered, image-only and protected text may not be available through Accessibility.",480,13,MUTED)
     navbar(d,"Lens"); return im
 
@@ -150,7 +149,7 @@ def page_subtitles():
 
 def page_settings():
     im,d=base("Settings","Settings",None,True)
-    rows=[("L","Translation languages","English > 简体中文"),("L","Translate Lens","Accessibility and floating bubble"),("D","Offline models","Download or remove language models"),("P","Privacy","How SwiftLens reads and translates text"),("i","About","SwiftLens for Android · 0.4.0")]
+    rows=[("L","Translation languages","English > 简体中文"),("L","Translate Lens","Accessibility and floating bubble"),("D","Offline models","Select language packs"),("P","Privacy","How SwiftLens reads and translates text"),("i","About","SwiftLens for Android · 0.5.0")]
     y=157
     for icon,title,note in rows:
         card(d,y,88); text(d,39,y+28,icon,24,BLUE,True); text(d,84,y+16,title,15,NAVY,True); text(d,84,y+46,note,11,MUTED); text(d,480,y+25,"›",24,MUTED); y+=101
@@ -182,12 +181,26 @@ def page_about():
     card(d,166,270)
     rr(d,(228,198,312,282),PALE,42); text(d,254,219,"L",37,BLUE,True)
     text(d,208,309,"SwiftLens for Android",20,NAVY,True)
-    text(d,212,345,"Version 0.4.0 · Android 16 target",13,MUTED)
+    text(d,212,345,"Version 0.5.0 · Android 16 target",13,MUTED)
     card(d,462,150)
     text(d,42,486,"English <-> 简体中文",16,NAVY,True)
     wrap(d,42,528,"Text, photo, voice and Accessibility-based Translate Lens.",440,14,MUTED)
     text(d,24,662,"Offline model download requires an initial Wi-Fi connection.",13,MUTED)
     navbar(d,"Settings"); return im
+
+def page_models():
+    im,d=base("Models","Offline models","Select individual language packs for offline translation.")
+    for y,label,note,ready in [(174,"English","English model · Downloaded",True),(278,"简体中文","Simplified Chinese model · Not installed",False)]:
+        card(d,y,84); rr(d,(42,y+27,66,y+51),WHITE,5,outline=BLUE,width=2)
+        if ready:
+            d.line((47,y+39,52,y+45,62,y+32),fill=BLUE,width=3)
+        text(d,86,y+19,label,16,NAVY,True); text(d,86,y+49,note,12,MUTED)
+    card(d,388,164); text(d,44,412,"Both packs enable offline EN ↔ ZH",16,NAVY,True)
+    wrap(d,44,450,"Select either model independently. Downloads require Wi-Fi and translations run locally after installation.",444,14,MUTED)
+    button(d,590,"Download selected packs")
+    button(d,660,"Remove selected packs",fill=WHITE,fg=BLUE)
+    text(d,24,750,"Each language pack can be managed separately.",13,MUTED)
+    return im
 
 def modal_background(page):
     im=page().convert("RGBA")
@@ -223,7 +236,7 @@ def page_consent():
     rr(d,(245,727,482,777),BLUE,14); text(d,293,743,"Agree & open",14,WHITE,True)
     return im
 
-pages={"Home":page_home,"Translate":page_translate,"Method":page_method,"Online consent":page_consent,"Lens":page_lens,"Setup":page_setup,"Photo":page_photo,"Voice":page_voice,"Chat":page_chat,"Subtitles":page_subtitles,"Settings":page_settings,"Languages":page_languages,"Privacy":page_privacy,"About":page_about}
+pages={"Home":page_home,"Translate":page_translate,"Method":page_method,"Online consent":page_consent,"Lens":page_lens,"Models":page_models,"Setup":page_setup,"Photo":page_photo,"Voice":page_voice,"Chat":page_chat,"Subtitles":page_subtitles,"Settings":page_settings,"Languages":page_languages,"Privacy":page_privacy,"About":page_about}
 for name,render in pages.items():
     render().save(OUT/f"{name}.png")
 

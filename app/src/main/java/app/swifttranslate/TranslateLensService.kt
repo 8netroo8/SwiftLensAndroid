@@ -17,7 +17,6 @@ import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.TextView
 import android.widget.Toast
-import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.common.model.RemoteModelManager
 import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.TranslateRemoteModel
@@ -127,23 +126,16 @@ class TranslateLensService : AccessibilityService() {
         body.addView(direction)
         val modelStatus = label("Checking offline models…", 12, Color.DKGRAY)
         body.addView(modelStatus)
-        val action = label("Download both offline language models", 14, Color.rgb(30, 90, 45), true).apply {
+        val action = label("Manage English and Chinese packs in SwiftLens", 14, Color.rgb(30, 90, 45), true).apply {
             setPadding(0, dp(12), 0, dp(8))
-            setOnClickListener { downloadOfflineModels(modelStatus) }
+            setOnClickListener {
+                removePanel()
+                startActivity(Intent(this@TranslateLensService, MainActivity::class.java)
+                    .putExtra("preview_page", "Models")
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
         }
         body.addView(action)
-        body.addView(label("Remove English and Chinese models", 13, Color.DKGRAY).apply {
-            setPadding(0, dp(8), 0, dp(4))
-            setOnClickListener {
-            RemoteModelManager.getInstance().deleteDownloadedModel(englishModel)
-                .addOnSuccessListener {
-                    RemoteModelManager.getInstance().deleteDownloadedModel(chineseModel)
-                        .addOnSuccessListener { modelStatus.post { modelStatus.text = "English and Chinese offline models removed." } }
-                        .addOnFailureListener { error -> modelStatus.post { modelStatus.text = "Could not remove Chinese model: ${error.localizedMessage ?: "try again"}" } }
-                }
-                .addOnFailureListener { error -> modelStatus.post { modelStatus.text = "Could not remove English model: ${error.localizedMessage ?: "try again"}" } }
-            }
-        })
         body.addView(label("Tap this panel to close", 11, Color.GRAY).apply { setPadding(0, dp(8), 0, 0); setOnClickListener { removePanel() } })
         panel = body
         val (screenW, screenH) = screenSize()
@@ -321,20 +313,6 @@ class TranslateLensService : AccessibilityService() {
         val dx = max(max(rect.left - x, 0), x - rect.right)
         val dy = max(max(rect.top - y, 0), y - rect.bottom)
         return sqrt((dx * dx + dy * dy).toDouble()).toInt()
-    }
-
-    private fun downloadOfflineModels(status: TextView) {
-        val manager = RemoteModelManager.getInstance()
-        val conditions = DownloadConditions.Builder().requireWifi().build()
-        status.text = "Downloading English model… connect to Wi-Fi."
-        manager.download(englishModel, conditions)
-            .addOnSuccessListener {
-                status.post { status.text = "Downloading Chinese model…" }
-                manager.download(chineseModel, conditions)
-                    .addOnSuccessListener { status.post { status.text = "Both offline models are ready." } }
-                    .addOnFailureListener { error -> status.post { status.text = "Chinese model download failed: ${error.localizedMessage ?: "check Wi-Fi and retry"}" } }
-            }
-            .addOnFailureListener { error -> status.post { status.text = "English model download failed: ${error.localizedMessage ?: "check Wi-Fi and retry"}" } }
     }
 
     private fun refreshModelState(target: TextView? = null) {
