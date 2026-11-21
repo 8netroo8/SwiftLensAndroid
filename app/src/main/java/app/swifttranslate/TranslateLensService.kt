@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
+import android.content.Intent
 import android.os.Build
 import android.view.Gravity
 import android.view.MotionEvent
@@ -12,6 +13,8 @@ import android.view.WindowManager
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import android.widget.LinearLayout
+import android.widget.RadioButton
+import android.widget.RadioGroup
 import android.widget.TextView
 import android.widget.Toast
 import com.google.mlkit.common.model.DownloadConditions
@@ -35,7 +38,7 @@ class TranslateLensService : AccessibilityService() {
 
     private val fromLanguage: String get() = if (targetEnglish) TranslateLanguage.ENGLISH else TranslateLanguage.CHINESE
     private val toLanguage: String get() = if (targetEnglish) TranslateLanguage.CHINESE else TranslateLanguage.ENGLISH
-    // ML Kit bundles its English model. Only Chinese needs an explicit remote model download.
+    private val englishModel: TranslateRemoteModel get() = TranslateRemoteModel.Builder(TranslateLanguage.ENGLISH).build()
     private val chineseModel: TranslateRemoteModel get() = TranslateRemoteModel.Builder(TranslateLanguage.CHINESE).build()
 
     override fun onServiceConnected() {
@@ -124,17 +127,21 @@ class TranslateLensService : AccessibilityService() {
         body.addView(direction)
         val modelStatus = label("Checking offline models…", 12, Color.DKGRAY)
         body.addView(modelStatus)
-        val action = label("Download Chinese model for offline use", 14, Color.rgb(30, 90, 45), true).apply {
+        val action = label("Download both offline language models", 14, Color.rgb(30, 90, 45), true).apply {
             setPadding(0, dp(12), 0, dp(8))
             setOnClickListener { downloadOfflineModels(modelStatus) }
         }
         body.addView(action)
-        body.addView(label("Remove downloaded Chinese model", 13, Color.DKGRAY).apply {
+        body.addView(label("Remove English and Chinese models", 13, Color.DKGRAY).apply {
             setPadding(0, dp(8), 0, dp(4))
             setOnClickListener {
-                RemoteModelManager.getInstance().deleteDownloadedModel(chineseModel)
-                    .addOnSuccessListener { modelStatus.post { modelStatus.text = "Chinese model removed. Download it to use either direction." } }
-                    .addOnFailureListener { error -> modelStatus.post { modelStatus.text = "Could not remove model: ${error.localizedMessage ?: "try again"}" } }
+            RemoteModelManager.getInstance().deleteDownloadedModel(englishModel)
+                .addOnSuccessListener {
+                    RemoteModelManager.getInstance().deleteDownloadedModel(chineseModel)
+                        .addOnSuccessListener { modelStatus.post { modelStatus.text = "English and Chinese offline models removed." } }
+                        .addOnFailureListener { error -> modelStatus.post { modelStatus.text = "Could not remove Chinese model: ${error.localizedMessage ?: "try again"}" } }
+                }
+                .addOnFailureListener { error -> modelStatus.post { modelStatus.text = "Could not remove English model: ${error.localizedMessage ?: "try again"}" } }
             }
         })
         body.addView(label("Tap this panel to close", 11, Color.GRAY).apply { setPadding(0, dp(8), 0, 0); setOnClickListener { removePanel() } })
@@ -160,34 +167,115 @@ class TranslateLensService : AccessibilityService() {
 
     private fun translateTextAt(x: Int, y: Int) {
         if (busy) return
-        val sourceLanguage = fromLanguage
-        val targetLanguage = toLanguage
         val sourceIsEnglish = targetEnglish
         val nodeText = findTextNodeAt(x, y)
         if (nodeText.isNullOrBlank()) {
             showResult("No readable text at the lens position", "Move the lens directly over a text element and try again.", sourceIsEnglish)
             return
         }
+        showTranslationChoice(nodeText, sourceIsEnglish)
+    }
+
+    private fun showTranslationChoice(original: String, sourceIsEnglish: Boolean) {
+        removePanel()
+        val body = panelContainer()
+        body.addView(label("Choose translation method", 18, Color.rgb(24, 34, 31), true))
+        body.addView(label("Offline stays on this device. Online opens a provider you choose.", 13, Color.DKGRAY).apply { setPadding(0, dp(5), 0, dp(8)) })
+        val methods = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
+        val offline = RadioButton(this).apply { text = "Offline · ML Kit (on device)"; id = 1; isChecked = true }
+        val online = RadioButton(this).apply { text = "Online · open translation platform"; id = 2 }
+        methods.addView(offline); methods.addView(online); body.addView(methods)
+        body.addView(label("ONLINE PLATFORM", 11, Color.GRAY, true).apply { setPadding(dp(4), dp(5), 0, dp(3)) })
+        val providers = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
+        val options = OnlineProvider.entries.mapIndexed { index, provider ->
+            RadioButton(this).apply { text = provider.label; id = 10 + index }
+        }
+        options.forEach { providers.addView(it) }
+        providers.check(10)
+        body.addView(providers)
+        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END; setPadding(0, dp(8), 0, 0) }
+        actions.addView(actionLabel("Cancel", false) { removePanel() })
+        actions.addView(actionLabel("Continue", true) {
+            if (methods.checkedRadioButtonId == online.id) {
+                val selectedIndex = (providers.checkedRadioButtonId - 10).takeIf { it in OnlineProvider.entries.indices } ?: 0
+                val chosen = OnlineProvider.entries[selectedIndex]
+                showOnlineConfirmation(original, sourceIsEnglish, chosen)
+            } else {
+                removePanel()
+                translateOffline(original, sourceIsEnglish)
+            }
+        })
+        body.addView(actions)
+        showOverlayPanel(body, 320, 410)
+    }
+
+    private fun showOnlineConfirmation(original: String, sourceIsEnglish: Boolean, provider: OnlineProvider) {
+        removePanel()
+        val body = panelContainer()
+        body.addView(label("Open ${provider.label}?", 18, Color.rgb(24, 34, 31), true))
+        body.addView(label("The selected text will be placed in ${provider.label} and may be sent to that provider for online processing. SwiftLens will not send it until you confirm here.", 14, Color.DKGRAY).apply { setPadding(0, dp(8), 0, dp(8)) })
+        body.addView(label("Text: ${original.take(160)}${if (original.length > 160) "…" else ""}", 12, Color.GRAY).apply { setPadding(0, dp(4), 0, dp(8)) })
+        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END; setPadding(0, dp(8), 0, 0) }
+        actions.addView(actionLabel("Back", false) { showTranslationChoice(original, sourceIsEnglish) })
+        actions.addView(actionLabel("Agree & open", true) {
+            removePanel()
+            runCatching { OnlineTranslation.open(this, provider, sourceIsEnglish, original) }
+                .onFailure { showResult(original, "Could not open ${provider.label}. Check that a browser is installed.", sourceIsEnglish) }
+        })
+        body.addView(actions)
+        showOverlayPanel(body, 320, 330)
+    }
+
+    private fun panelContainer() = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(dp(18), dp(16), dp(18), dp(14))
+        background = rounded(Color.WHITE, dp(18).toFloat())
+        elevation = dp(12).toFloat()
+    }
+
+    private fun actionLabel(value: String, primary: Boolean, action: () -> Unit) = TextView(this).apply {
+        text = value; textSize = 14f; gravity = Gravity.CENTER; isClickable = true
+        setTextColor(if (primary) Color.WHITE else Color.rgb(35, 87, 164))
+        setPadding(dp(13), dp(10), dp(13), dp(10))
+        if (primary) background = rounded(Color.rgb(40, 120, 240), dp(10).toFloat())
+        setOnClickListener { action() }
+    }
+
+    private fun showOverlayPanel(body: LinearLayout, widthDp: Int, maxHeightDp: Int) {
+        panel = body
+        val (screenW, screenH) = screenSize()
+        val x = if (bubbleParams.x < screenW / 2) bubbleParams.x else screenW - bubbleParams.x - dp(widthDp)
+        val y = (bubbleParams.y + bubbleParams.height + dp(8)).coerceIn(0, max(0, screenH - dp(maxHeightDp)))
+        val params = WindowManager.LayoutParams(dp(widthDp), WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.START; this.x = x.coerceAtLeast(0); this.y = y }
+        windowManager.addView(body, params)
+    }
+
+    private fun translateOffline(original: String, sourceIsEnglish: Boolean) {
+        if (busy) return
+        val sourceLanguage = if (sourceIsEnglish) TranslateLanguage.ENGLISH else TranslateLanguage.CHINESE
+        val targetLanguage = if (sourceIsEnglish) TranslateLanguage.CHINESE else TranslateLanguage.ENGLISH
         busy = true
         bubble?.post { bubble?.text = "…" }
         val continueTranslation = {
                 val options = TranslatorOptions.Builder().setSourceLanguage(sourceLanguage).setTargetLanguage(targetLanguage).build()
                 val translator = Translation.getClient(options)
-                translator.translate(nodeText)
-                    .addOnSuccessListener { result -> busy = false; translator.close(); showResult(nodeText, result, sourceIsEnglish) }
-                    .addOnFailureListener { busy = false; translator.close(); showResult(nodeText, "Translation failed. Confirm the offline model is installed.", sourceIsEnglish) }
+                translator.translate(original)
+                    .addOnSuccessListener { result -> busy = false; translator.close(); showResult(original, result, sourceIsEnglish) }
+                    .addOnFailureListener { busy = false; translator.close(); showResult(original, "Offline translation failed. Confirm the model is installed.", sourceIsEnglish) }
         }
-        RemoteModelManager.getInstance().isModelDownloaded(chineseModel)
-            .addOnSuccessListener { downloaded ->
-                if (!downloaded) {
+        val manager = RemoteModelManager.getInstance()
+        manager.isModelDownloaded(englishModel).addOnSuccessListener { englishReady ->
+            manager.isModelDownloaded(chineseModel).addOnSuccessListener { chineseReady ->
+                if (!englishReady || !chineseReady) {
                     busy = false
                     bubble?.post { bubble?.text = "译" }
-                    showResult(nodeText, "Chinese offline model not installed. Tap the lens and download it while online.", sourceIsEnglish)
-                    return@addOnSuccessListener
-                }
-                continueTranslation()
-            }
-            .addOnFailureListener { busy = false; bubble?.post { bubble?.text = "译" }; showResult(nodeText, "Could not check offline model status.", sourceIsEnglish) }
+                    showResult(original, "Both English and Chinese offline models are required. Tap the lens and download them over Wi-Fi.", sourceIsEnglish)
+                } else continueTranslation()
+            }.addOnFailureListener { busy = false; bubble?.post { bubble?.text = "译" }; showResult(original, "Could not check Chinese model status.", sourceIsEnglish) }
+        }.addOnFailureListener { busy = false; bubble?.post { bubble?.text = "译" }; showResult(original, "Could not check English model status.", sourceIsEnglish) }
     }
 
     private data class TextCandidate(val text: String, val bounds: Rect, val area: Long)
@@ -238,17 +326,24 @@ class TranslateLensService : AccessibilityService() {
     private fun downloadOfflineModels(status: TextView) {
         val manager = RemoteModelManager.getInstance()
         val conditions = DownloadConditions.Builder().requireWifi().build()
-        status.text = "English model is built in. Downloading the Chinese model… connect to Wi-Fi."
-        manager.download(chineseModel, conditions)
-            .addOnSuccessListener { status.post { status.text = "Offline translation is ready in both directions." } }
-            .addOnFailureListener { error -> status.post { status.text = "Model download failed: ${error.localizedMessage ?: "check Wi-Fi and retry"}" } }
+        status.text = "Downloading English model… connect to Wi-Fi."
+        manager.download(englishModel, conditions)
+            .addOnSuccessListener {
+                status.post { status.text = "Downloading Chinese model…" }
+                manager.download(chineseModel, conditions)
+                    .addOnSuccessListener { status.post { status.text = "Both offline models are ready." } }
+                    .addOnFailureListener { error -> status.post { status.text = "Chinese model download failed: ${error.localizedMessage ?: "check Wi-Fi and retry"}" } }
+            }
+            .addOnFailureListener { error -> status.post { status.text = "English model download failed: ${error.localizedMessage ?: "check Wi-Fi and retry"}" } }
     }
 
     private fun refreshModelState(target: TextView? = null) {
         val manager = RemoteModelManager.getInstance()
-        manager.isModelDownloaded(chineseModel).addOnSuccessListener { zh ->
-            val state = "English model: built in · Chinese model: ${if (zh) "ready" else "not downloaded"}"
-            target?.post { target.text = state }
+        manager.isModelDownloaded(englishModel).addOnSuccessListener { en ->
+            manager.isModelDownloaded(chineseModel).addOnSuccessListener { zh ->
+                val state = "English: ${if (en) "ready" else "not downloaded"} · Chinese: ${if (zh) "ready" else "not downloaded"}"
+                target?.post { target.text = state }
+            }
         }
     }
 
@@ -281,3 +376,4 @@ class TranslateLensService : AccessibilityService() {
     override fun onInterrupt() = Unit
     override fun onDestroy() { removePanel(); bubble?.let { try { windowManager.removeView(it) } catch (_: Exception) { } }; super.onDestroy() }
 }
+

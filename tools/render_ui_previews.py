@@ -99,7 +99,9 @@ def page_lens():
     wrap(d,52,346,"Drag the bubble onto a message, post or subtitle. SwiftLens reads the nearest accessibility text node and shows the translation beside it.",436,14,MUTED)
     button(d,500,"Enable Accessibility Service",x=42,w=456)
     button(d,568,"View setup steps",x=42,w=456,fill=WHITE,fg=BLUE)
-    card(d,668,142); text(d,42,686,"D",22,BLUE,True); text(d,82,687,"Offline language model",16,NAVY,True); text(d,82,714,"Chinese model not downloaded",12,MUTED); text(d,42,754,"Download or remove it from the floating lens menu.",12,MUTED)
+    card(d,668,158); text(d,42,686,"D",22,BLUE,True); text(d,82,687,"Offline language models",16,NAVY,True); text(d,82,714,"English + Chinese · Wi-Fi download",12,MUTED)
+    rr(d,(82,750,220,786),PALE,10); text(d,100,759,"Download both",12,BLUE,True)
+    text(d,244,759,"Remove",12,BLUE,True)
     wrap(d,24,834,"Canvas-rendered, image-only and protected text may not be available through Accessibility.",480,13,MUTED)
     navbar(d,"Lens"); return im
 
@@ -148,7 +150,7 @@ def page_subtitles():
 
 def page_settings():
     im,d=base("Settings","Settings",None,True)
-    rows=[("L","Translation languages","English > 简体中文"),("L","Translate Lens","Accessibility and floating bubble"),("D","Offline models","Download or remove language models"),("P","Privacy","How SwiftLens reads and translates text"),("i","About","SwiftLens for Android · 0.3.0")]
+    rows=[("L","Translation languages","English > 简体中文"),("L","Translate Lens","Accessibility and floating bubble"),("D","Offline models","Download or remove language models"),("P","Privacy","How SwiftLens reads and translates text"),("i","About","SwiftLens for Android · 0.4.0")]
     y=157
     for icon,title,note in rows:
         card(d,y,88); text(d,39,y+28,icon,24,BLUE,True); text(d,84,y+16,title,15,NAVY,True); text(d,84,y+46,note,11,MUTED); text(d,480,y+25,"›",24,MUTED); y+=101
@@ -180,14 +182,48 @@ def page_about():
     card(d,166,270)
     rr(d,(228,198,312,282),PALE,42); text(d,254,219,"L",37,BLUE,True)
     text(d,208,309,"SwiftLens for Android",20,NAVY,True)
-    text(d,212,345,"Version 0.3.0 · Android 16 target",13,MUTED)
+    text(d,212,345,"Version 0.4.0 · Android 16 target",13,MUTED)
     card(d,462,150)
     text(d,42,486,"English <-> 简体中文",16,NAVY,True)
     wrap(d,42,528,"Text, photo, voice and Accessibility-based Translate Lens.",440,14,MUTED)
     text(d,24,662,"Offline model download requires an initial Wi-Fi connection.",13,MUTED)
     navbar(d,"Settings"); return im
 
-pages={"Home":page_home,"Translate":page_translate,"Lens":page_lens,"Setup":page_setup,"Photo":page_photo,"Voice":page_voice,"Chat":page_chat,"Subtitles":page_subtitles,"Settings":page_settings,"Languages":page_languages,"Privacy":page_privacy,"About":page_about}
+def modal_background(page):
+    im=page().convert("RGBA")
+    shade=Image.new("RGBA",(W,H),(10,20,35,145))
+    return Image.alpha_composite(im,shade).convert("RGB")
+
+def page_method():
+    im=modal_background(page_translate); d=ImageDraw.Draw(im)
+    rr(d,(34,300,506,850),WHITE,24)
+    text(d,58,326,"Choose translation method",22,NAVY,True)
+    text(d,58,367,"Offline stays on this device. Online opens a",13,MUTED); text(d,58,389,"provider you choose.",13,MUTED)
+    for y,label,selected in [(444,"Offline · ML Kit (on device)",True),(510,"Online · provider website",False)]:
+        d.ellipse((61,y,83,y+22),outline=BLUE if selected else MUTED,width=2)
+        if selected: d.ellipse((67,y+6,77,y+16),fill=BLUE)
+        text(d,96,y,label,15,NAVY,True)
+    text(d,60,582,"ONLINE PLATFORM",11,MUTED,True)
+    for y,label,checked in [(619,"Google Translate",True),(671,"DeepL",False),(723,"Microsoft Bing Translator",False)]:
+        d.ellipse((64,y,84,y+20),outline=BLUE if checked else MUTED,width=2)
+        if checked: d.ellipse((69,y+5,79,y+15),fill=BLUE)
+        text(d,97,y,label,14,NAVY)
+    rr(d,(62,782,236,830),"#F0F3F7",14); text(d,119,797,"Cancel",14,BLUE,True)
+    rr(d,(252,782,478,830),BLUE,14); text(d,324,797,"Continue",14,WHITE,True)
+    return im
+
+def page_consent():
+    im=modal_background(page_translate); d=ImageDraw.Draw(im)
+    rr(d,(34,360,506,810),WHITE,24)
+    text(d,58,391,"Open Google Translate?",21,NAVY,True)
+    wrap(d,58,443,"The text you entered will be placed in Google Translate and may be sent to that provider for online processing. SwiftLens will not send it until you confirm here.",410,15,MUTED)
+    rr(d,(58,555,482,625),"#F4F7FB",14)
+    text(d,74,577,"Text: How are you?",14,NAVY)
+    rr(d,(62,727,227,777),"#F0F3F7",14); text(d,119,743,"Back",14,BLUE,True)
+    rr(d,(245,727,482,777),BLUE,14); text(d,293,743,"Agree & open",14,WHITE,True)
+    return im
+
+pages={"Home":page_home,"Translate":page_translate,"Method":page_method,"Online consent":page_consent,"Lens":page_lens,"Setup":page_setup,"Photo":page_photo,"Voice":page_voice,"Chat":page_chat,"Subtitles":page_subtitles,"Settings":page_settings,"Languages":page_languages,"Privacy":page_privacy,"About":page_about}
 for name,render in pages.items():
     render().save(OUT/f"{name}.png")
 
@@ -196,10 +232,10 @@ thumbs=[]
 for name in pages:
     im=Image.open(OUT/f"{name}.png").resize((216,480))
     thumbs.append((name,im))
-sheet=Image.new("RGB",(216*4,510*3+60),"#E8EDF4"); sd=ImageDraw.Draw(sheet)
+sheet=Image.new("RGB",(216*4,510*4+60),"#E8EDF4"); sd=ImageDraw.Draw(sheet)
 for idx,(name,im) in enumerate(thumbs):
     x=(idx%4)*216; y=(idx//4)*510
     sheet.paste(im,(x,y+25)); sd.text((x+10,y+4),name,font=font(14,True),fill=NAVY)
-sd.text((10,1540),"Layout render preview · not an Android device screenshot",font=font(12),fill=MUTED)
+sd.text((10,2050),"Layout render preview · not an Android device screenshot",font=font(12),fill=MUTED)
 sheet.save(OUT/"ContactSheet.png")
 

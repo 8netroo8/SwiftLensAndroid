@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 8432)
+Total output lines: 436
+
 package app.swifttranslate
 
 import android.content.Intent
@@ -82,8 +85,8 @@ private fun SwiftLensApp(initialPage: String) {
                 "Voice" -> VoicePage(modifier, englishToChinese, { draft = it; page = "Translate" }, { page = "Home" })
                 "Chat" -> ChatPage(modifier, { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) })
                 "Subtitles" -> SubtitlePage(modifier, { page = "Setup" })
-                "Privacy" -> InfoPage(modifier, "Privacy", "SwiftLens translates text on this device with downloaded models. The lens reads only the accessibility text node near the point where you drop it. Selected photos are processed locally. No display capture, notifications, ads, or billing are used.") { page = "Settings" }
-                "About" -> InfoPage(modifier, "About SwiftLens", "SwiftLens for Android · English ↔ Simplified Chinese · Android 16 target") { page = "Settings" }
+                "Privacy" -> InfoPage(modifier, "Privacy", "Offline translation and selected-photo OCR run on this device after model setup. If you choose an online provider, SwiftLens shows the selected platform and asks you to confirm before opening it with your text. The provider processes text under its own privacy terms. The lens reads only the accessibility text node near your drop point. No display capture, notifications, ads, or billing are used.") { page = "Settings" }
+                "About" -> InfoPage(modifier, "About SwiftLens", "SwiftLens for Android · English ↔ Simplified Chinese · Android 16 target · v0.4.0") { page = "Settings" }
                 else -> HomePage(modifier, { page = it })
             }
         }
@@ -151,78 +154,34 @@ private fun ActionCard(title: String, note: String, icon: ImageVector, modifier:
 
 @Composable
 private fun TranslatePage(modifier: Modifier, draft: String, onDraft: (String) -> Unit, enToZh: Boolean, swap: () -> Unit, open: (String) -> Unit) {
+    val context = LocalContext.current
     var source by remember(draft) { mutableStateOf(draft) }
     var result by remember { mutableStateOf("") }
+    var flowStep by remember { mutableIntStateOf(0) }
+    var onlineMode by remember { mutableStateOf(false) }
+    var provider by remember { mutableStateOf(OnlineProvider.GOOGLE) }
+
+    fun translateOffline() {
+        result = "Translating offline…"
+        val from = if (enToZh) TranslateLanguage.ENGLISH else TranslateLanguage.CHINESE
+        val to = if (enToZh) TranslateLanguage.CHINESE else TranslateLanguage.ENGLISH
+        val enModel = TranslateRemoteModel.Builder(TranslateLanguage.ENGLISH).build()
+        val zhModel = TranslateRemoteModel.Builder(TranslateLanguage.CHINESE).build()
+        val modelManager = RemoteModelManager.getInstance()
+        modelManager.isModelDownloaded(enModel).addOnSuccessListener { englishReady ->
+            modelManager.isModelDownloaded(zhModel).addOnSuccessListener { chineseReady ->
+                if (!englishReady || !chineseReady) result = "Download both offline language models from the Lens page first."
+                else {
+                    val translator = Translation.getClient(TranslatorOptions.Builder().setSourceLanguage(from).setTargetLanguage(to).build())
+                    translator.translate(source.trim()).addOnSuccessListener { result = it; translator.close() }.addOnFailureListener { result = "Offline translation failed. Try again."; translator.close() }
+                }
+            }
+        }.addOnFailureListener { result = "Could not check offline model status." }
+    }
+
     PageFrame(modifier, "Text translation", "Type, paste, speak or choose a photo.") {
         Surface(color = Color.White, shape = RoundedCornerShape(18.dp)) {
-            Row(Modifier.fillMaxWidth().clickable(onClick = swap).padding(15.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                Text(if (enToZh) "English" else "简体中文", color = Navy, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.width(20.dp)); Icon(Icons.Default.SwapHoriz, null, tint = Blue); Spacer(Modifier.width(20.dp))
-                Text(if (enToZh) "简体中文" else "English", color = Navy, fontWeight = FontWeight.SemiBold)
-            }
-        }
-        OutlinedTextField(source, { source = it; onDraft(it) }, Modifier.fillMaxWidth().height(180.dp), placeholder = { Text("Enter text") }, shape = RoundedCornerShape(18.dp), trailingIcon = { IconButton(onClick = { source = ""; onDraft("") }) { Icon(Icons.Default.Close, "Clear") } }, colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = Color(0xFFE4E9F0), focusedBorderColor = Blue, focusedContainerColor = Color.White, unfocusedContainerColor = Color.White))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(onClick = { open("Photo") }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp)) { Icon(Icons.Default.Image, null); Spacer(Modifier.width(5.dp)); Text("Photo") }
-            OutlinedButton(onClick = { open("Voice") }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp)) { Icon(Icons.Default.Mic, null); Spacer(Modifier.width(5.dp)); Text("Voice") }
-        }
-        Button(onClick = {
-            if (source.isBlank()) result = "Enter text to translate."
-            else {
-                result = "Translating…"
-                val from = if (enToZh) TranslateLanguage.ENGLISH else TranslateLanguage.CHINESE
-                val to = if (enToZh) TranslateLanguage.CHINESE else TranslateLanguage.ENGLISH
-                val zhModel = TranslateRemoteModel.Builder(TranslateLanguage.CHINESE).build()
-                RemoteModelManager.getInstance().isModelDownloaded(zhModel).addOnSuccessListener { ready ->
-                    if (!ready) result = "Download the Chinese offline model from the Lens menu first."
-                    else {
-                        val translator = Translation.getClient(TranslatorOptions.Builder().setSourceLanguage(from).setTargetLanguage(to).build())
-                        translator.translate(source.trim()).addOnSuccessListener { result = it; translator.close() }.addOnFailureListener { result = "Translation failed. Try again."; translator.close() }
-                    }
-                }.addOnFailureListener { result = "Could not check offline model status." }
-            }
-        }, Modifier.fillMaxWidth().height(52.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue), shape = RoundedCornerShape(15.dp)) { Icon(Icons.Default.Translate, null); Spacer(Modifier.width(8.dp)); Text("Translate", fontWeight = FontWeight.SemiBold) }
-        if (result.isNotBlank()) Surface(color = Color.White, shape = RoundedCornerShape(18.dp)) { Column(Modifier.fillMaxWidth().padding(18.dp)) { Text("TRANSLATION", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Secondary, letterSpacing = 1.sp); Spacer(Modifier.height(8.dp)); Text(result, color = Navy, fontSize = 18.sp, lineHeight = 25.sp) } }
-        Text("Offline translation is available after the Chinese model is downloaded.", color = Secondary, fontSize = 12.sp, lineHeight = 17.sp)
-    }
-}
-
-@Composable
-private fun LensPage(modifier: Modifier, setup: () -> Unit, open: (String) -> Unit) {
-    PageFrame(modifier, "Screen translator", "Translate text inside other apps with a floating lens.") {
-        Surface(color = Color.White, shape = RoundedCornerShape(22.dp)) {
-            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(Modifier.size(82.dp).background(PaleBlue, CircleShape), Alignment.Center) { Icon(Icons.Default.Lens, null, tint = Blue, modifier = Modifier.size(38.dp)) }
-                Text("Translate Lens", color = Navy, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text("Drag the bubble onto a message, post or subtitle. SwiftLens reads the nearest accessibility text node and shows the translation beside it.", color = Secondary, fontSize = 13.sp, lineHeight = 19.sp)
-                Button(onClick = setup, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Blue), shape = RoundedCornerShape(14.dp)) { Text("Enable Accessibility Service") }
-                OutlinedButton(onClick = { open("Setup") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text("View setup steps") }
-            }
-        }
-        ModelCard()
-        Text("Canvas-rendered, image-only and protected text may not be available through Accessibility.", color = Secondary, fontSize = 12.sp, lineHeight = 17.sp)
-    }
-}
-
-@Composable
-private fun ModelCard() {
-    val manager = remember { RemoteModelManager.getInstance() }
-    val model = remember { TranslateRemoteModel.Builder(TranslateLanguage.CHINESE).build() }
-    var status by remember { mutableStateOf("Checking model…") }
-    LaunchedEffect(Unit) { manager.isModelDownloaded(model).addOnSuccessListener { status = if (it) "Chinese model downloaded" else "Chinese model not downloaded" } }
-    Surface(color = Color.White, shape = RoundedCornerShape(18.dp)) {
-        Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.CloudDownload, null, tint = Blue); Spacer(Modifier.width(10.dp)); Column { Text("Offline language model", color = Navy, fontWeight = FontWeight.SemiBold); Text(status, color = Secondary, fontSize = 12.sp) } }
-            Text("Open the floating lens menu to download or remove the Chinese model.", color = Secondary, fontSize = 12.sp, lineHeight = 17.sp)
-        }
-    }
-}
-
-@Composable
-private fun SetupPage(modifier: Modifier, openAccessibility: () -> Unit, done: () -> Unit) {
-    PageFrame(modifier, "Set up Translate Lens", "Allow SwiftLens to read only the text you point the lens at.") {
-        listOf("1" to "Open Accessibility settings", "2" to "Choose SwiftLens and turn it on", "3" to "Return here, then drag the floating lens onto text").forEach { (number, text) ->
-            Surface(color = Color.White, shape = RoundedCornerShape(16.dp)) { Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(34.dp).background(PaleBlue, CircleShape), Alignment.Center) { Text(number, color = Blue, fontWeight = FontWeight.Bold) }; Spacer(Modifier.width(13.dp)); Text(text, color = Navy, fontWeight = FontWeight.Medium, lineHeight = 20.sp) } }
+            Row(Modifier.fillMaxWidth().clickable(onClick = swap).padding(15.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Ar…2432 tokens truncated…kground(PaleBlue, CircleShape), Alignment.Center) { Text(number, color = Blue, fontWeight = FontWeight.Bold) }; Spacer(Modifier.width(13.dp)); Text(text, color = Navy, fontWeight = FontWeight.Medium, lineHeight = 20.sp) } }
         }
         Button(onClick = openAccessibility, modifier = Modifier.fillMaxWidth().height(52.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue), shape = RoundedCornerShape(14.dp)) { Text("Open Accessibility settings") }
         TextButton(onClick = done, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("I’ll do this later", color = Secondary) }
@@ -335,7 +294,7 @@ private fun SettingsPage(modifier: Modifier, open: (String) -> Unit, enToZh: Boo
         SettingsRow("Translate Lens", "Accessibility and floating bubble", Icons.Default.Lens) { open("Lens") }
         SettingsRow("Offline models", "Download or remove language models", Icons.Default.CloudDownload) { open("Lens") }
         SettingsRow("Privacy", "How SwiftLens reads and translates text", Icons.Default.Security) { open("Privacy") }
-        SettingsRow("About", "SwiftLens for Android · 0.3.0", Icons.Default.Info) { open("About") }
+        SettingsRow("About", "SwiftLens for Android · 0.4.0", Icons.Default.Info) { open("About") }
         Text("No ads · No billing · No screen capture", color = Secondary, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
     }
 }

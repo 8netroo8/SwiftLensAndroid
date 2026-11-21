@@ -19,7 +19,9 @@ The **Build Android APK** GitHub Actions workflow runs on pushes to `main` and c
 3. Open an app with accessible text and drag the floating **译** lens onto one text element. The lens reads the closest visible text node under the drop point and shows a translation card.
 4. Tap the lens to switch English → Simplified Chinese / Simplified Chinese → English, and download or remove the Chinese translation model.
 
-The translation model download is Wi-Fi-only. After the Chinese model is installed, both directions work offline. The Chinese text-recognition model is bundled with the app. Speech dictation requires Android 12+ and an installed on-device speech language pack. Microphone permission is requested only after the user taps **Speak**.
+Before each text or Lens translation, choose **Offline** or **Online**. Offline mode uses the downloaded on-device English and Chinese ML Kit models. The Lens page can download or remove both packs; downloads require Wi-Fi. The Chinese text-recognition model is bundled with the app. Speech dictation requires Android 12+ and an installed on-device speech language pack. Microphone permission is requested only after the user taps **Speak**.
+
+Online mode lets you select Google Translate, DeepL, or Microsoft Bing Translator. SwiftLens shows a confirmation naming the platform and explaining that the source text may be sent to it. Only **Agree and open** proceeds; translation opens on the provider's website or app. The provider applies its own privacy terms. No text is sent to an online provider when you choose Offline or cancel.
 
 The lens does not read notifications or scan the screen. Chat translation works by placing the lens over individual exposed message text nodes. Subtitle translation works only when the video app exposes subtitle text through Accessibility; this build does not transcribe video audio. Photo OCR processes only an image explicitly chosen by the user. It does not access screenshots or capture the display. The app contains no MediaProjection, screen recording, screen sharing, ads, or billing.
 
@@ -27,7 +29,8 @@ The lens does not read notifications or scan the screen. Chat translation works 
 
 - On an Android 16 device, enable the accessibility service and confirm the lens appears without a screen-capture prompt.
 - Drag the lens over accessible English text, then switch direction and repeat over Simplified Chinese text.
-- Download the Chinese model, enable airplane mode, and verify both directions still translate.
+- Download both language models, enable airplane mode, choose Offline, and verify both directions still translate.
+- Choose Online, select a provider, cancel the confirmation, and verify the provider does not open. Then confirm and verify the selected platform opens with the source text.
 - Drag over image-only or canvas-rendered screen text and confirm no accessible text node is found.
 - Choose a photo in the Translate tab and confirm recognized text appears before translation.
 - On Android 12+ with an offline speech pack, grant microphone permission from **Speak**, dictate a phrase, then translate it.
