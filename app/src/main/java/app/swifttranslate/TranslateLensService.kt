@@ -189,19 +189,45 @@ class TranslateLensService : AccessibilityService() {
         removePanel()
         val body = panelContainer()
         body.addView(label("Choose translation method", 18, Color.rgb(24, 34, 31), true))
-        body.addView(label("Choose on-device offline translation. Online API providers will be added after you select one in Codex.", 13, Color.DKGRAY).apply { setPadding(0, dp(5), 0, dp(8)) })
+        body.addView(label("Choose offline on-device translation or send the selected text to Alibaba Cloud after confirmation.", 13, Color.DKGRAY).apply { setPadding(0, dp(5), 0, dp(8)) })
         val methods = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
         val offline = RadioButton(this).apply { text = "Offline · ML Kit (on device)"; id = 1; isChecked = true }
-        val online = RadioButton(this).apply { text = "Online · provider not configured"; id = 2; isEnabled = false }
+        val online = RadioButton(this).apply { text = "Online · Alibaba Cloud"; id = 2 }
         methods.addView(offline); methods.addView(online); body.addView(methods)
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END; setPadding(0, dp(8), 0, 0) }
         actions.addView(actionLabel("Cancel", false) { removePanel(); scheduleCompact() })
         actions.addView(actionLabel("Continue", true) {
-            removePanel()
-            translateOffline(original, sourceIsEnglish)
+            if (methods.checkedRadioButtonId == online.id) showAlibabaConfirmation(original, sourceIsEnglish)
+            else { removePanel(); translateOffline(original, sourceIsEnglish) }
         })
         body.addView(actions)
         showOverlayPanel(body, 320, 410)
+    }
+
+    private fun showAlibabaConfirmation(original: String, sourceIsEnglish: Boolean) {
+        removePanel()
+        val body = panelContainer()
+        body.addView(label("Send text to Alibaba Cloud?", 18, Color.rgb(24, 34, 31), true))
+        body.addView(label("This text will be sent to Alibaba Cloud Machine Translation for processing. API usage may incur charges. Nothing is sent unless you confirm here.", 14, Color.DKGRAY).apply { setPadding(0, dp(8), 0, dp(8)) })
+        body.addView(label("Text: ${original.take(130)}${if (original.length > 130) "…" else ""}", 12, Color.GRAY).apply { setPadding(0, dp(4), 0, dp(8)) })
+        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END; setPadding(0, dp(8), 0, 0) }
+        actions.addView(actionLabel("Cancel", false) { removePanel(); scheduleCompact() })
+        actions.addView(actionLabel("Agree & translate", true) {
+            removePanel()
+            if (!AlibabaCredentialStore.hasCredentials(this)) {
+                showResult(original, "Add Alibaba Cloud credentials in Translate Len → Settings → Online provider, then retry. No text was sent.", sourceIsEnglish)
+            } else {
+                busy = true
+                bubble?.post { bubble?.text = "…" }
+                AlibabaCloudTranslation.translate(this, original, sourceIsEnglish) { translated, error ->
+                    busy = false
+                    bubble?.post { bubble?.text = "译" }
+                    showResult(original, translated ?: (error ?: "Alibaba Cloud translation failed."), sourceIsEnglish)
+                }
+            }
+        })
+        body.addView(actions)
+        showOverlayPanel(body, 320, 370)
     }
 
     private fun panelContainer() = LinearLayout(this).apply {
@@ -331,3 +357,4 @@ class TranslateLensService : AccessibilityService() {
     override fun onInterrupt() = Unit
     override fun onDestroy() { mainHandler.removeCallbacks(compactRunnable); removePanel(); bubble?.let { try { windowManager.removeView(it) } catch (_: Exception) { } }; super.onDestroy() }
 }
+
