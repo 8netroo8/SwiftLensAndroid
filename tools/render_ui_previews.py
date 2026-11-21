@@ -151,7 +151,7 @@ def page_subtitles():
 
 def page_settings():
     im,d=base("Settings","Settings",None,True)
-    rows=[("L","Translation languages","English > 简体中文"),("L","Translate Lens","Accessibility and floating bubble"),("D","Offline models","Select language packs"),("P","Privacy","How Translate Len reads text"),("i","About","Translate Len · 0.7.0 · 8netroo8")]
+    rows=[("L","Translation languages","English > 简体中文"),("L","Translate Lens","Accessibility and floating bubble"),("D","Offline models","Select language packs"),("C","Online provider","Alibaba Cloud API"),("P","Privacy","How Translate Len reads text"),("i","About","Translate Len · 0.8.0 · 8netroo8")]
     y=157
     for icon,title,note in rows:
         card(d,y,88); text(d,39,y+28,icon,24,BLUE,True); text(d,84,y+16,title,15,NAVY,True); text(d,84,y+46,note,11,MUTED); text(d,480,y+25,"›",24,MUTED); y+=101
@@ -183,7 +183,7 @@ def page_about():
     card(d,166,270)
     rr(d,(228,198,312,282),PALE,42); text(d,254,219,"L",37,BLUE,True)
     text(d,208,309,"Translate Len for Android",20,NAVY,True)
-    text(d,212,345,"Version 0.7.0 · Android 16 target",13,MUTED)
+    text(d,212,345,"Version 0.8.0 · Android 16 target",13,MUTED)
     card(d,462,150)
     text(d,42,486,"English <-> 简体中文",16,NAVY,True)
     wrap(d,42,528,"Text, photo, voice and Accessibility-based Translate Lens.\nDeveloper: 8netroo8",440,14,MUTED)
@@ -225,12 +225,12 @@ def page_method():
     im=modal_background(page_translate); d=ImageDraw.Draw(im)
     rr(d,(34,360,506,735),WHITE,24)
     text(d,58,386,"Choose translation method",22,NAVY,True)
-    text(d,58,404,"Offline runs on this device. Online API is pending",13,MUTED); text(d,58,426,"your provider choice in Codex; no website opens.",13,MUTED)
+    text(d,58,404,"Offline runs on this device. Online sends text to",13,MUTED); text(d,58,426,"Alibaba Cloud only after you confirm.",13,MUTED)
     for y,label,selected in [(488,"Offline · ML Kit (on device)",True),(554,"Online · API not configured",False)]:
         d.ellipse((61,y,83,y+22),outline=BLUE if selected else MUTED,width=2)
         if selected: d.ellipse((67,y+6,77,y+16),fill=BLUE)
         text(d,96,y,label,15,NAVY,True)
-    wrap(d,58,615,"Choose an API provider in Codex before using online translation. Text is not sent until an in-app provider is connected.",408,14,MUTED)
+    wrap(d,58,615,"Online translation runs in the app. The source text is sent only after your confirmation.",408,14,MUTED)
     rr(d,(62,670,236,718),"#F0F3F7",14); text(d,119,685,"Cancel",14,BLUE,True)
     rr(d,(252,670,478,718),BLUE,14); text(d,324,685,"Continue",14,WHITE,True)
     return im
@@ -239,7 +239,7 @@ def page_consent():
     im=modal_background(page_translate); d=ImageDraw.Draw(im)
     rr(d,(34,360,506,810),WHITE,24)
     text(d,58,391,"Online translation pending",21,NAVY,True)
-    wrap(d,58,443,"No translation website is opened and no text is sent. Choose an API platform in Codex; the app will then call that provider directly after confirmation.",410,15,MUTED)
+    wrap(d,58,443,"No website is opened. The selected text is sent to Alibaba Cloud only after you confirm this request.",410,15,MUTED)
     rr(d,(62,727,482,777),BLUE,14); text(d,220,743,"Understood",14,WHITE,True)
     return im
 
@@ -258,3 +258,4 @@ for idx,(name,im) in enumerate(thumbs):
     sheet.paste(im,(x,y+25)); sd.text((x+10,y+4),name,font=font(14,True),fill=NAVY)
 sd.text((10,2050),"Layout render preview · not an Android device screenshot",font=font(12),fill=MUTED)
 sheet.save(OUT/"ContactSheet.png")
+
