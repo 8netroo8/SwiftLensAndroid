@@ -62,7 +62,7 @@ private fun SwiftLensApp(initialPage: String) {
     var draft by remember { mutableStateOf("") }
     var englishToChinese by remember { mutableStateOf(preferences.getBoolean("english_to_chinese", true)) }
     val rootPages = setOf("Home", "Translate", "Lens", "Settings")
-    BackHandler(page !in rootPages) { page = if (page == "Models") "Settings" else "Home" }
+    BackHandler(page !in rootPages) { page = if (page in setOf("Models", "OnlineProvider")) "Settings" else "Home" }
     MaterialTheme(colorScheme = lightColorScheme(primary = Blue, background = Page, surface = Color.White)) {
         Scaffold(containerColor = Page, bottomBar = {
             if (page in rootPages) NavigationBar(containerColor = Color.White) {
@@ -78,14 +78,15 @@ private fun SwiftLensApp(initialPage: String) {
                 "Lens" -> LensPage(modifier, { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }, { page = it })
                 "Settings" -> SettingsPage(modifier, { page = it }, englishToChinese)
                 "Models" -> OfflineModelsPage(modifier)
+                "OnlineProvider" -> AlibabaProviderPage(modifier) { page = "Settings" }
                 "Languages" -> LanguagePage(modifier, englishToChinese, { englishToChinese = it; preferences.edit().putBoolean("english_to_chinese", it).apply(); page = "Settings" })
                 "Setup" -> SetupPage(modifier, { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }, { page = "Lens" })
                 "Photo" -> PhotoPage(modifier, { draft = it; page = "Translate" }, { page = "Home" })
-                "Voice" -> VoicePage(modifier, englishToChinese, { page = "Home" }, { page = "Models" })
+                "Voice" -> VoicePage(modifier, englishToChinese, { page = "Home" }, { page = "Models" }, { page = "OnlineProvider" })
                 "Chat" -> ChatPage(modifier, { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) })
                 "Subtitles" -> SubtitlePage(modifier, { page = "Setup" })
-                "Privacy" -> InfoPage(modifier, "Privacy", "Offline translation and selected-photo OCR run on this device after model setup. Online translation is not connected until you select an API provider in Codex; no web page is opened and no text is sent meanwhile. The lens reads only the accessibility text node near your drop point. No display capture, notifications, ads, or billing are used.") { page = "Settings" }
-                "About" -> InfoPage(modifier, "About Translate Len", "Translate Len for Android · English ↔ Simplified Chinese · Android 16 target · v0.7.0\n\nDeveloper: 8netroo8") { page = "Settings" }
+                "Privacy" -> InfoPage(modifier, "Privacy", "Offline translation and selected-photo OCR run on this device after model setup. Online translation sends only the text you explicitly confirm to Alibaba Cloud Machine Translation. Your AccessKey is encrypted with Android Keystore on this device. The lens reads only the accessibility text node near your drop point. No display capture, notifications, ads, or billing are used.") { page = "Settings" }
+                "About" -> InfoPage(modifier, "About Translate Len", "Translate Len for Android · English ↔ Simplified Chinese · Android 16 target · v0.8.0\n\nDeveloper: 8netroo8") { page = "Settings" }
                 else -> HomePage(modifier, { page = it })
             }
         }
@@ -192,7 +193,7 @@ private fun TranslatePage(modifier: Modifier, draft: String, onDraft: (String) -
         }
         Button(onClick = { if (source.isBlank()) result = "Enter text to translate." else flowStep = 1 }, Modifier.fillMaxWidth().height(52.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue), shape = RoundedCornerShape(15.dp)) { Icon(Icons.Default.Translate, null); Spacer(Modifier.width(8.dp)); Text("Translate", fontWeight = FontWeight.SemiBold) }
         if (result.isNotBlank()) Surface(color = Color.White, shape = RoundedCornerShape(18.dp)) { Column(Modifier.fillMaxWidth().padding(18.dp)) { Text("TRANSLATION", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Secondary, letterSpacing = 1.sp); Spacer(Modifier.height(8.dp)); Text(result, color = Navy, fontSize = 18.sp, lineHeight = 25.sp) } }
-        Text("Offline translation runs on this device. Online translation stays disabled until an API provider is selected in Codex; no website opens.", color = Secondary, fontSize = 12.sp, lineHeight = 17.sp)
+        Text("Offline translation runs on this device. Online translation uses Alibaba Cloud only after you confirm each request.", color = Secondary, fontSize = 12.sp, lineHeight = 17.sp)
     }
 
     if (flowStep == 1) AlertDialog(
@@ -204,17 +205,35 @@ private fun TranslatePage(modifier: Modifier, draft: String, onDraft: (String) -
                     RadioButton(selected = !onlineMode, onClick = { onlineMode = false }); Column { Text("Offline · ML Kit"); Text("Runs on this device after model download.", fontSize = 12.sp, color = Secondary) }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onlineMode = true }) {
-                    RadioButton(selected = onlineMode, onClick = { onlineMode = true }); Column { Text("Online · API provider pending"); Text("Will translate inside the app after you choose a provider in Codex.", fontSize = 12.sp, color = Secondary) }
+                    RadioButton(selected = onlineMode, onClick = { onlineMode = true }); Column { Text("Online · Alibaba Cloud"); Text("In-app translation. You will confirm before text is sent.", fontSize = 12.sp, color = Secondary) }
                 }
-                if (onlineMode) Text("Online translation is waiting for you to choose an API provider in Codex. Translate Len will not open a website or send text until that provider is added.", fontSize = 12.sp, color = Secondary, lineHeight = 17.sp)
+                if (onlineMode) Text("Alibaba Cloud may charge for API usage. Configure credentials in Settings → Online provider.", fontSize = 12.sp, color = Secondary, lineHeight = 17.sp)
             }
         },
         confirmButton = { TextButton(onClick = {
             if (onlineMode) {
-                flowStep = 0
-                result = "Online API is not connected yet. Choose a provider in Codex and it can be added here. No website was opened and no text was sent."
+                flowStep = 2
             } else { flowStep = 0; translateOffline() }
         }) { Text("Continue") } },
+        dismissButton = { TextButton(onClick = { flowStep = 0 }) { Text("Cancel") } }
+    )
+
+    if (flowStep == 2) AlertDialog(
+        onDismissRequest = { flowStep = 0 },
+        title = { Text("Send text to Alibaba Cloud?") },
+        text = { Text("Your text will be sent to Alibaba Cloud Machine Translation for processing. This API may incur charges. No website will open. Continue only if you agree.") },
+        confirmButton = { TextButton(onClick = {
+            flowStep = 0
+            if (!AlibabaCredentialStore.hasCredentials(context)) {
+                result = "Add your Alibaba Cloud AccessKey credentials in Settings → Online provider first. No text was sent."
+                open("OnlineProvider")
+            } else {
+                result = "Translating with Alibaba Cloud…"
+                AlibabaCloudTranslation.translate(context, source.trim(), enToZh) { translated, error ->
+                    result = translated ?: (error ?: "Alibaba Cloud translation failed.")
+                }
+            }
+        }) { Text("Agree and translate") } },
         dismissButton = { TextButton(onClick = { flowStep = 0 }) { Text("Cancel") } }
     )
 
@@ -350,7 +369,7 @@ private fun ModelSelectionRow(label: String, detail: String, ready: Boolean, sel
 
 @Composable
 private fun SetupPage(modifier: Modifier, openAccessibility: () -> Unit, done: () -> Unit) {
-    PageFrame(modifier, "Set up Translate Lens", "Allow SwiftLens to read only the text you point the lens at.") {
+    PageFrame(modifier, "Set up Translate Lens", "Allow Translate Len to read only the text you point the lens at.") {
         listOf("1" to "Open Accessibility settings", "2" to "Choose Translate Len Lens and turn it on", "3" to "Return here, then drag the floating lens onto text").forEach { (number, text) ->
             Surface(color = Color.White, shape = RoundedCornerShape(16.dp)) { Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(34.dp).background(PaleBlue, CircleShape), Alignment.Center) { Text(number, color = Blue, fontWeight = FontWeight.Bold) }; Spacer(Modifier.width(13.dp)); Text(text, color = Navy, fontWeight = FontWeight.Medium, lineHeight = 20.sp) } }
         }
@@ -421,18 +440,21 @@ private fun PhotoPage(modifier: Modifier, onText: (String) -> Unit, back: () -> 
 }
 
 @Composable
-private fun VoicePage(modifier: Modifier, enToZh: Boolean, back: () -> Unit, openModels: () -> Unit) {
+private fun VoicePage(modifier: Modifier, enToZh: Boolean, back: () -> Unit, openModels: () -> Unit, openOnlineProvider: () -> Unit) {
     val context = LocalContext.current
     var transcript by remember { mutableStateOf("") }
     var translation by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("Tap the microphone and speak.") }
     var listening by remember { mutableStateOf(false) }
     var showSpeechConsent by remember { mutableStateOf(false) }
+    var showTranslationMethod by remember { mutableStateOf(false) }
+    var showOnlineConfirmation by remember { mutableStateOf(false) }
+    var onlineMode by remember { mutableStateOf(false) }
     val onDeviceRecognition = remember { Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context) }
     val recognizer = remember { if (onDeviceRecognition) SpeechRecognizer.createOnDeviceSpeechRecognizer(context) else SpeechRecognizer.createSpeechRecognizer(context) }
     val sourceLanguage = if (enToZh) TranslateLanguage.ENGLISH else TranslateLanguage.CHINESE
     val targetLanguage = if (enToZh) TranslateLanguage.CHINESE else TranslateLanguage.ENGLISH
-    fun translateTranscript() {
+    fun translateOfflineTranscript() {
         if (transcript.isBlank()) { status = "Speak or enter text first."; return }
         status = "Checking offline language models…"
         val manager = RemoteModelManager.getInstance()
@@ -470,7 +492,7 @@ private fun VoicePage(modifier: Modifier, enToZh: Boolean, back: () -> Unit, ope
         if (!granted) status = "Microphone permission is required."
         else runCatching { recognizer.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply { putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM); putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (enToZh) "en-US" else "zh-CN"); putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true); putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1) }) }.onFailure { status = "Could not start speech recognition: ${it.localizedMessage ?: "try again"}" }
     }
-    PageFrame(modifier, "Voice translation", "Speak, review the recognized text, and translate it offline.") {
+    PageFrame(modifier, "Voice translation", "Speak, review the transcript, then choose offline or Alibaba Cloud translation.") {
         Surface(color = Color.White, shape = RoundedCornerShape(22.dp)) {
             Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text(if (enToZh) "English → 简体中文" else "简体中文 → English", color = Blue, fontWeight = FontWeight.SemiBold)
@@ -481,7 +503,7 @@ private fun VoicePage(modifier: Modifier, enToZh: Boolean, back: () -> Unit, ope
                     OutlinedButton(onClick = { transcript = ""; translation = ""; status = "Tap the microphone and speak." }, shape = RoundedCornerShape(14.dp)) { Icon(Icons.Default.DeleteOutline, null); Spacer(Modifier.width(6.dp)); Text("Clear") }
                 }
                 OutlinedTextField(transcript, { transcript = it; translation = "" }, modifier = Modifier.fillMaxWidth().height(140.dp), label = { Text("Recognized text · editable") }, shape = RoundedCornerShape(15.dp))
-                Button(onClick = ::translateTranscript, enabled = transcript.isNotBlank() && !listening, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Blue), shape = RoundedCornerShape(14.dp)) { Icon(Icons.Default.Translate, null); Spacer(Modifier.width(8.dp)); Text("Translate offline") }
+                Button(onClick = { showTranslationMethod = true }, enabled = transcript.isNotBlank() && !listening, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Blue), shape = RoundedCornerShape(14.dp)) { Icon(Icons.Default.Translate, null); Spacer(Modifier.width(8.dp)); Text("Translate") }
                 if (translation.isNotBlank()) Surface(color = PaleBlue, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp)) { Text("TRANSLATION", color = Blue, fontSize = 11.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(6.dp)); Text(translation, color = Navy, fontSize = 18.sp, lineHeight = 24.sp) } }
                 Text(status, color = Secondary, fontSize = 13.sp)
             }
@@ -490,6 +512,41 @@ private fun VoicePage(modifier: Modifier, enToZh: Boolean, back: () -> Unit, ope
         TextButton(onClick = openModels, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Manage offline language models") }
         TextButton(onClick = back, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Back to home") }
     }
+    if (showTranslationMethod) AlertDialog(
+        onDismissRequest = { showTranslationMethod = false },
+        title = { Text("Choose translation method") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onlineMode = false }) {
+                    RadioButton(selected = !onlineMode, onClick = { onlineMode = false }); Column { Text("Offline · ML Kit"); Text("Runs on this device after model download.", fontSize = 12.sp, color = Secondary) }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onlineMode = true }) {
+                    RadioButton(selected = onlineMode, onClick = { onlineMode = true }); Column { Text("Online · Alibaba Cloud"); Text("Sends transcript only after your confirmation.", fontSize = 12.sp, color = Secondary) }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { showTranslationMethod = false; if (onlineMode) showOnlineConfirmation = true else translateOfflineTranscript() }) { Text("Continue") } },
+        dismissButton = { TextButton(onClick = { showTranslationMethod = false }) { Text("Cancel") } }
+    )
+    if (showOnlineConfirmation) AlertDialog(
+        onDismissRequest = { showOnlineConfirmation = false },
+        title = { Text("Send transcript to Alibaba Cloud?") },
+        text = { Text("The recognized text will be sent to Alibaba Cloud Machine Translation. API usage may incur charges. No audio is sent by this translation request.") },
+        confirmButton = { TextButton(onClick = {
+            showOnlineConfirmation = false
+            if (!AlibabaCredentialStore.hasCredentials(context)) {
+                status = "Add Alibaba Cloud credentials in Settings → Online provider first. No text was sent."
+                openOnlineProvider()
+            } else {
+                status = "Translating with Alibaba Cloud…"
+                AlibabaCloudTranslation.translate(context, transcript.trim(), enToZh) { translated, error ->
+                    translation = translated.orEmpty()
+                    status = if (translated != null) "Translated with Alibaba Cloud." else (error ?: "Alibaba Cloud translation failed.")
+                }
+            }
+        }) { Text("Agree and translate") } },
+        dismissButton = { TextButton(onClick = { showOnlineConfirmation = false }) { Text("Cancel") } }
+    )
     if (showSpeechConsent) AlertDialog(
         onDismissRequest = { showSpeechConsent = false },
         title = { Text("Use device speech service?") },
@@ -505,9 +562,55 @@ private fun SettingsPage(modifier: Modifier, open: (String) -> Unit, enToZh: Boo
         SettingsRow("Translation languages", if (enToZh) "English → 简体中文" else "简体中文 → English", Icons.Default.Language) { open("Languages") }
         SettingsRow("Translate Lens", "Accessibility and floating bubble", Icons.Default.Lens) { open("Lens") }
         SettingsRow("Offline models", "Choose and manage language packs", Icons.Default.CloudDownload) { open("Models") }
+        SettingsRow("Online provider", "Alibaba Cloud Machine Translation", Icons.Default.Cloud) { open("OnlineProvider") }
         SettingsRow("Privacy", "How Translate Len reads and translates text", Icons.Default.Security) { open("Privacy") }
-        SettingsRow("About", "Translate Len · 0.7.0 · Developer 8netroo8", Icons.Default.Info) { open("About") }
+        SettingsRow("About", "Translate Len · 0.8.0 · Developer 8netroo8", Icons.Default.Info) { open("About") }
         Text("No ads · No billing · No screen capture", color = Secondary, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+    }
+}
+
+@Composable
+private fun AlibabaProviderPage(modifier: Modifier, back: () -> Unit) {
+    val context = LocalContext.current
+    var accessKeyId by remember { mutableStateOf("") }
+    var accessKeySecret by remember { mutableStateOf("") }
+    var configured by remember { mutableStateOf(AlibabaCredentialStore.hasCredentials(context)) }
+    var status by remember { mutableStateOf(if (configured) "Alibaba Cloud credentials are saved on this device." else "No Alibaba Cloud credentials saved.") }
+
+    PageFrame(modifier, "Online provider", "Alibaba Cloud Machine Translation · English ↔ 简体中文") {
+        Surface(color = Color.White, shape = RoundedCornerShape(18.dp)) {
+            Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
+                Text("Configure AccessKey", color = Navy, fontWeight = FontWeight.SemiBold)
+                Text("Use an Alibaba Cloud RAM user credential limited to the Machine Translation call permission. Do not use your root account key.", color = Secondary, fontSize = 12.sp, lineHeight = 18.sp)
+                OutlinedTextField(accessKeyId, { accessKeyId = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("AccessKey ID") }, shape = RoundedCornerShape(12.dp))
+                OutlinedTextField(accessKeySecret, { accessKeySecret = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("AccessKey Secret") }, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), shape = RoundedCornerShape(12.dp))
+                Text("The secret is encrypted with Android Keystore and stored only on this device. The APK contains no cloud credentials. Translation text is sent only after you confirm an online request.", color = Secondary, fontSize = 12.sp, lineHeight = 18.sp)
+                Text(status, color = if (configured) Color(0xFF27834A) else Secondary, fontSize = 12.sp)
+            }
+        }
+        Button(onClick = {
+            runCatching { AlibabaCredentialStore.save(context, accessKeyId, accessKeySecret) }
+                .onSuccess {
+                    configured = true
+                    accessKeyId = ""
+                    accessKeySecret = ""
+                    status = "Credentials encrypted and saved on this device."
+                }
+                .onFailure { status = "Could not save credentials: ${it.localizedMessage ?: "try again"}" }
+        }, enabled = accessKeyId.isNotBlank() && accessKeySecret.isNotBlank(), modifier = Modifier.fillMaxWidth().height(50.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue), shape = RoundedCornerShape(14.dp)) {
+            Icon(Icons.Default.Lock, null); Spacer(Modifier.width(8.dp)); Text("Save credentials")
+        }
+        if (configured) OutlinedButton(onClick = {
+            AlibabaCredentialStore.clear(context)
+            configured = false
+            accessKeyId = ""
+            accessKeySecret = ""
+            status = "Credentials removed from this device."
+        }, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(14.dp)) {
+            Icon(Icons.Default.DeleteOutline, null); Spacer(Modifier.width(8.dp)); Text("Remove saved credentials")
+        }
+        Text("Each text, lens, or voice translation is sent only after you select Alibaba Cloud and confirm. Requests are limited to 5,000 characters.", color = Secondary, fontSize = 12.sp, lineHeight = 18.sp)
+        TextButton(onClick = back, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Back to settings") }
     }
 }
 
@@ -536,3 +639,4 @@ private fun InfoPage(modifier: Modifier, title: String, body: String, back: () -
         TextButton(onClick = back, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Back to settings") }
     }
 }
+
