@@ -1,3 +1,4 @@
 <resources>
     <string name="lens_accessibility_description">When you drag the Translate Len bubble over text, read the text node at that position and translate it. The service does not capture the screen.</string>
 </resources>
+
