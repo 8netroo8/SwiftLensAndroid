@@ -10,7 +10,7 @@ An Android 16-targeted SwiftLens project with dedicated Home, Text, Lens, Chat, 
 
 ## Build APK online
 
-The **Build Android APK** GitHub Actions workflow runs on pushes to `main` and can also be started from the repository's **Actions** tab with **Run workflow**. On success, download `SwiftLensAndroid-debug` for the APK and `SwiftLensAndroid-ui-previews` for Android 16 emulator screenshots. Both artifacts are retained for 14 days.
+The **Build Android APK** GitHub Actions workflow runs on pushes to `main` and can also be started from the repository's **Actions** tab with **Run workflow**. On success, download `SwiftLensAndroid-debug` for the APK and `SwiftLensAndroid-ui-previews` for rendered layout previews. Both artifacts are retained for 14 days. The PNGs are generated from the screen layouts for visual review; they are not screenshots captured from an Android device.
 
 ## Translate Lens
 

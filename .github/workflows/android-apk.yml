@@ -48,52 +48,28 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  screenshots:
-    name: Capture UI previews
+  previews:
+    name: Render UI previews
     needs: build
-    runs-on: macos-15
+    runs-on: ubuntu-latest
     steps:
-      - name: Download APK
-        uses: actions/download-artifact@v4
-        with:
-          name: SwiftLensAndroid-debug
-          path: apk
+      - name: Check out source
+        uses: actions/checkout@v4
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          packages: 'platform-tools emulator'
+      - name: Install preview renderer and CJK font
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-noto-cjk
+          python -m pip install --user Pillow
 
-      - name: Install Android 16 emulator image
-        run: sdkmanager "platforms;android-36" "system-images;android-36;google_apis;arm64-v8a" "emulator"
+      - name: Render visual UI previews
+        run: python tools/render_ui_previews.py
 
-      - name: Start ADB server
-        run: adb start-server
-
-      - name: Capture app pages
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 36
-          target: google_apis
-          arch: arm64-v8a
-          profile: pixel_6
-          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
-          script: |
-            adb install apk/app-debug.apk
-            mkdir -p screenshots
-            for page in Home Translate Lens Setup Photo Voice Chat Subtitles Settings Languages; do
-              adb shell am force-stop app.swifttranslate
-              adb shell am start -n app.swifttranslate/.MainActivity --es preview_page "$page"
-              sleep 3
-              adb shell screencap -p "/sdcard/${page}.png"
-              adb pull "/sdcard/${page}.png" "screenshots/${page}.png"
-            done
-
-      - name: Upload UI screenshots
+      - name: Upload UI preview renders
         uses: actions/upload-artifact@v4
         with:
           name: SwiftLensAndroid-ui-previews
-          path: screenshots/*.png
+          path: ui-previews/*.png
           if-no-files-found: error
           retention-days: 14
 
