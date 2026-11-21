@@ -331,4 +331,3 @@ class TranslateLensService : AccessibilityService() {
     override fun onInterrupt() = Unit
     override fun onDestroy() { mainHandler.removeCallbacks(compactRunnable); removePanel(); bubble?.let { try { windowManager.removeView(it) } catch (_: Exception) { } }; super.onDestroy() }
 }
-import com.google.mlkit.common.model.RemoteModelManager
