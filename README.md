@@ -1,6 +1,6 @@
 # Translate Len Android
 
-An Android 16-targeted Translate Len project with dedicated Home, Text, Lens, Chat, Subtitle, Photo, Voice, Language, and Settings pages. The floating lens reads visible accessibility text nodes near the user's drop point. English ↔ Simplified Chinese translation uses ML Kit's on-device translation models. Photo OCR runs on an image explicitly chosen from the photo picker; voice dictation produces editable text and an in-app offline translation. No ads or billing are included.
+An Android 16-targeted Translate Len project with dedicated Home, Text, Lens, Chat, Subtitle, Photo, Voice, Language, and Settings pages. The floating lens reads visible accessibility text nodes near the user's drop point. English ↔ Simplified Chinese translation supports on-device ML Kit models and explicitly confirmed Alibaba Cloud Machine Translation API requests. Photo OCR runs on an image explicitly chosen from the photo picker; voice dictation produces editable text and supports offline or confirmed online translation. No ads or billing are included.
 
 ## Open and run
 
@@ -21,7 +21,7 @@ The **Build Android APK** GitHub Actions workflow runs on pushes to `main` and c
 
 Before each text translation, choose **Offline** or **Online**. Offline mode uses the on-device English and Chinese ML Kit models. Open **Settings → Offline models** to select either language pack independently, then download or remove the selected packs in the app; downloads require Wi-Fi. Keep both packs installed to translate in either direction offline. Voice translation shows editable speech-recognition text and translates on device. The Chinese text-recognition model is bundled with the app. Microphone permission is requested only after the user taps **Speak**.
 
-Online mode is a placeholder until the user selects an API platform in Codex. It never launches a website and does not send text. After platform selection, the provider will be integrated for in-app translation with explicit consent.
+Online mode uses Alibaba Cloud Machine Translation in-app. Open **Settings → Online provider** to enter an Alibaba Cloud RAM AccessKey ID and secret. The credentials are encrypted at rest with Android Keystore and are not embedded in the APK. The app makes no request until you choose Online and confirm that request; each request may incur Alibaba Cloud usage charges. Requests use the Hangzhou general translation REST endpoint and are limited to 5,000 characters. Do not enter a root-account AccessKey; use a narrowly scoped RAM credential.
 
 The lens does not read notifications or scan the screen. Chat translation works by placing the lens over individual exposed message text nodes. Subtitle translation works only when the video app exposes subtitle text through Accessibility; this build does not transcribe video audio. Photo OCR processes only an image explicitly chosen by the user. It does not access screenshots or capture the display. The app contains no MediaProjection, screen recording, screen sharing, ads, or billing.
 
@@ -30,7 +30,8 @@ The lens does not read notifications or scan the screen. Chat translation works 
 - On an Android 16 device, enable the accessibility service and confirm the lens appears without a screen-capture prompt.
 - Drag the lens over accessible English text, then switch direction and repeat over Simplified Chinese text.
 - Download both language models, enable airplane mode, choose Offline, and verify both directions still translate.
-- Choose Online before an API provider is selected and verify no website opens and no text is sent.
+- Configure Alibaba Cloud credentials, choose Online, cancel the consent dialog, and verify no request is sent. Confirm a request and verify the translation appears in the app or lens bubble without opening a website.
 - Drag over image-only or canvas-rendered screen text and confirm no accessible text node is found.
 - Choose a photo in the Translate tab and confirm recognized text appears before translation.
 - On Android 12+ with an on-device speech service, grant microphone permission from **Speak**, edit the recognized transcript if needed, then translate it. On devices without on-device speech recognition, the device's configured speech service may use a network.
+
