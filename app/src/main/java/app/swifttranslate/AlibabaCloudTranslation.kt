@@ -160,7 +160,7 @@ internal object AlibabaCloudTranslation {
             setRequestProperty("x-acs-signature-method", "HMAC-SHA1")
             setRequestProperty("x-acs-version", "2019-01-02")
         }
-        try {
+        return try {
             connection.outputStream.use { it.write(bodyBytes) }
             val status = connection.responseCode
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
