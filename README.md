@@ -17,7 +17,7 @@ The **Build Android APK** GitHub Actions workflow runs on pushes to `main` and c
 1. Launch the app and tap **Set up screen translation**.
 2. Enable **Swift Translate Lens** in Android Accessibility settings.
 3. Open an app with accessible text and drag the floating **译** lens onto one text element. The lens reads the closest visible text node under the drop point and shows a translation card.
-4. Tap the lens to switch English → Simplified Chinese / Simplified Chinese → English, and download or remove the Chinese translation model.
+4. The lens rests as a small translucent tab on the nearest screen edge while idle; touch or drag it to expand. Tap it to switch English → Simplified Chinese / Simplified Chinese → English. Use its model shortcut to open the in-app language-pack manager.
 
 Before each text or Lens translation, choose **Offline** or **Online**. Offline mode uses the on-device English and Chinese ML Kit models. Open **Settings → Offline models** to select either language pack independently, then download or remove the selected packs in the app; downloads require Wi-Fi. Keep both packs installed to translate in either direction offline. The Chinese text-recognition model is bundled with the app. Speech dictation requires Android 12+ and an installed on-device speech language pack. Microphone permission is requested only after the user taps **Speak**.
 

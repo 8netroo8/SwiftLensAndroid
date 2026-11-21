@@ -7,6 +7,8 @@ import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
 import android.content.Intent
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.WindowManager
@@ -34,6 +36,10 @@ class TranslateLensService : AccessibilityService() {
     private lateinit var bubbleParams: WindowManager.LayoutParams
     private var targetEnglish = true // English -> Simplified Chinese; false is the reverse.
     private var busy = false
+    private var compact = false
+    private var compactOnLeft = true
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val compactRunnable = Runnable { compactBubble() }
 
     private val fromLanguage: String get() = if (targetEnglish) TranslateLanguage.ENGLISH else TranslateLanguage.CHINESE
     private val toLanguage: String get() = if (targetEnglish) TranslateLanguage.CHINESE else TranslateLanguage.ENGLISH
@@ -68,7 +74,10 @@ class TranslateLensService : AccessibilityService() {
         view.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    downX = event.rawX; downY = event.rawY; startX = bubbleParams.x; startY = bubbleParams.y; dragged = false; true
+                    downX = event.rawX; downY = event.rawY
+                    expandBubble()
+                    startX = bubbleParams.x; startY = bubbleParams.y; dragged = false
+                    true
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val dx = (event.rawX - downX).toInt(); val dy = (event.rawY - downY).toInt()
@@ -90,14 +99,67 @@ class TranslateLensService : AccessibilityService() {
                         val x = bubbleParams.x + bubbleParams.width / 2
                         val y = bubbleParams.y + bubbleParams.height / 2
                         translateTextAt(x, y)
-                    } else showLensMenu()
+                    } else {
+                        showLensMenu()
+                        scheduleCompact(7000)
+                    }
                     true
                 }
+                MotionEvent.ACTION_CANCEL -> { scheduleCompact(1200); true }
                 else -> true
             }
         }
         bubble = view
         windowManager.addView(view, bubbleParams)
+        scheduleCompact(1400)
+    }
+
+    private fun scheduleCompact(delayMs: Long = 2400) {
+        mainHandler.removeCallbacks(compactRunnable)
+        mainHandler.postDelayed(compactRunnable, delayMs)
+    }
+
+    private fun expandBubble() {
+        mainHandler.removeCallbacks(compactRunnable)
+        val view = bubble ?: return
+        if (!compact) return
+        val (_, screenH) = screenSize()
+        val (screenW, _) = screenSize()
+        val newWidth = dp(58)
+        val newHeight = dp(58)
+        val oldCenterY = bubbleParams.y + bubbleParams.height / 2
+        compact = false
+        bubbleParams.width = newWidth
+        bubbleParams.height = newHeight
+        bubbleParams.x = if (compactOnLeft) 0 else max(0, screenW - newWidth)
+        bubbleParams.y = (oldCenterY - newHeight / 2).coerceIn(0, max(0, screenH - newHeight))
+        view.text = "译"
+        view.textSize = 18f
+        view.alpha = 1f
+        view.elevation = dp(8).toFloat()
+        view.contentDescription = "Translate Lens. Drag over text to translate. Tap to open language and offline model settings."
+        runCatching { windowManager.updateViewLayout(view, bubbleParams) }
+    }
+
+    private fun compactBubble() {
+        val view = bubble ?: return
+        if (compact) return
+        val (screenW, screenH) = screenSize()
+        compactOnLeft = bubbleParams.x + bubbleParams.width / 2 < screenW / 2
+        val newWidth = dp(46)
+        val newHeight = dp(28)
+        val oldCenterY = bubbleParams.y + bubbleParams.height / 2
+        compact = true
+        bubbleParams.width = newWidth
+        bubbleParams.height = newHeight
+        bubbleParams.x = if (compactOnLeft) 0 else max(0, screenW - newWidth)
+        bubbleParams.y = (oldCenterY - newHeight / 2).coerceIn(0, max(0, screenH - newHeight))
+        view.text = "译"
+        view.textSize = 14f
+        view.alpha = 0.58f
+        view.elevation = dp(3).toFloat()
+        view.contentDescription = "Translate Lens minimized at screen edge. Tap to expand or drag onto text."
+        runCatching { windowManager.updateViewLayout(view, bubbleParams) }
     }
 
     private fun screenSize(): Pair<Int, Int> {
@@ -121,7 +183,7 @@ class TranslateLensService : AccessibilityService() {
         body.addView(label("Drag the bubble onto a text node to translate it.", 13, Color.DKGRAY).apply { setPadding(0, dp(5), 0, dp(10)) })
         val direction = label("", 15, Color.rgb(24, 34, 31), true).apply {
             setPadding(0, dp(10), 0, dp(10))
-            setOnClickListener { targetEnglish = !targetEnglish; getSharedPreferences("lens", MODE_PRIVATE).edit().putBoolean("english_to_chinese", targetEnglish).apply(); showLensMenu() }
+            setOnClickListener { targetEnglish = !targetEnglish; getSharedPreferences("lens", MODE_PRIVATE).edit().putBoolean("english_to_chinese", targetEnglish).apply(); showLensMenu(); scheduleCompact(7000) }
         }
         body.addView(direction)
         val modelStatus = label("Checking offline models…", 12, Color.DKGRAY)
@@ -130,13 +192,14 @@ class TranslateLensService : AccessibilityService() {
             setPadding(0, dp(12), 0, dp(8))
             setOnClickListener {
                 removePanel()
+                scheduleCompact(800)
                 startActivity(Intent(this@TranslateLensService, MainActivity::class.java)
                     .putExtra("preview_page", "Models")
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }
         }
         body.addView(action)
-        body.addView(label("Tap this panel to close", 11, Color.GRAY).apply { setPadding(0, dp(8), 0, 0); setOnClickListener { removePanel() } })
+        body.addView(label("Tap this panel to close", 11, Color.GRAY).apply { setPadding(0, dp(8), 0, 0); setOnClickListener { removePanel(); scheduleCompact(600) } })
         panel = body
         val (screenW, screenH) = screenSize()
         val x = if (bubbleParams.x < screenW / 2) bubbleParams.x else screenW - bubbleParams.x - dp(300)
@@ -186,7 +249,7 @@ class TranslateLensService : AccessibilityService() {
         providers.check(10)
         body.addView(providers)
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.END; setPadding(0, dp(8), 0, 0) }
-        actions.addView(actionLabel("Cancel", false) { removePanel() })
+        actions.addView(actionLabel("Cancel", false) { removePanel(); scheduleCompact() })
         actions.addView(actionLabel("Continue", true) {
             if (methods.checkedRadioButtonId == online.id) {
                 val selectedIndex = (providers.checkedRadioButtonId - 10).takeIf { it in OnlineProvider.entries.indices } ?: 0
@@ -213,6 +276,7 @@ class TranslateLensService : AccessibilityService() {
             removePanel()
             runCatching { OnlineTranslation.open(this, provider, sourceIsEnglish, original) }
                 .onFailure { showResult(original, "Could not open ${provider.label}. Check that a browser is installed.", sourceIsEnglish) }
+            scheduleCompact(1200)
         })
         body.addView(actions)
         showOverlayPanel(body, 320, 330)
@@ -335,7 +399,7 @@ class TranslateLensService : AccessibilityService() {
         card.addView(TextView(this).apply { text = translated; textSize = 17f; setTextColor(Color.rgb(24, 34, 31)); maxLines = 8; setPadding(0, dp(6), 0, dp(5)) })
         card.addView(TextView(this).apply { text = original; textSize = 12f; setTextColor(Color.DKGRAY); maxLines = 5 })
         card.addView(TextView(this).apply { text = "Tap to dismiss"; textSize = 10f; setTextColor(Color.GRAY); setPadding(0, dp(8), 0, 0) })
-        card.setOnClickListener { removePanel() }
+        card.setOnClickListener { removePanel(); scheduleCompact(500) }
         panel = card
         val (screenW, screenH) = screenSize()
         val cardWidth = dp(290)
@@ -346,12 +410,13 @@ class TranslateLensService : AccessibilityService() {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.START; this.x = x.coerceAtLeast(0); this.y = y }
         try { windowManager.addView(card, params) } catch (_: Exception) { Toast.makeText(this, translated, Toast.LENGTH_LONG).show() }
+        scheduleCompact(2600)
     }
 
     private fun rounded(color: Int, radius: Float) = GradientDrawable().apply { setColor(color); cornerRadius = radius }
     private fun removePanel() { panel?.let { try { windowManager.removeView(it) } catch (_: Exception) { } }; panel = null }
     override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) = Unit
     override fun onInterrupt() = Unit
-    override fun onDestroy() { removePanel(); bubble?.let { try { windowManager.removeView(it) } catch (_: Exception) { } }; super.onDestroy() }
+    override fun onDestroy() { mainHandler.removeCallbacks(compactRunnable); removePanel(); bubble?.let { try { windowManager.removeView(it) } catch (_: Exception) { } }; super.onDestroy() }
 }
 

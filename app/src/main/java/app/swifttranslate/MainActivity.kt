@@ -84,7 +84,7 @@ private fun SwiftLensApp(initialPage: String) {
                 "Chat" -> ChatPage(modifier, { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) })
                 "Subtitles" -> SubtitlePage(modifier, { page = "Setup" })
                 "Privacy" -> InfoPage(modifier, "Privacy", "Offline translation and selected-photo OCR run on this device after model setup. If you choose an online provider, SwiftLens shows the selected platform and asks you to confirm before opening it with your text. The provider processes text under its own privacy terms. The lens reads only the accessibility text node near your drop point. No display capture, notifications, ads, or billing are used.") { page = "Settings" }
-                "About" -> InfoPage(modifier, "About SwiftLens", "SwiftLens for Android · English ↔ Simplified Chinese · Android 16 target · v0.5.0") { page = "Settings" }
+                "About" -> InfoPage(modifier, "About SwiftLens", "SwiftLens for Android · English ↔ Simplified Chinese · Android 16 target · v0.6.0") { page = "Settings" }
                 else -> HomePage(modifier, { page = it })
             }
         }
@@ -478,7 +478,7 @@ private fun SettingsPage(modifier: Modifier, open: (String) -> Unit, enToZh: Boo
         SettingsRow("Translate Lens", "Accessibility and floating bubble", Icons.Default.Lens) { open("Lens") }
         SettingsRow("Offline models", "Choose and manage language packs", Icons.Default.CloudDownload) { open("Models") }
         SettingsRow("Privacy", "How SwiftLens reads and translates text", Icons.Default.Security) { open("Privacy") }
-        SettingsRow("About", "SwiftLens for Android · 0.5.0", Icons.Default.Info) { open("About") }
+        SettingsRow("About", "SwiftLens for Android · 0.6.0", Icons.Default.Info) { open("About") }
         Text("No ads · No billing · No screen capture", color = Secondary, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
     }
 }
