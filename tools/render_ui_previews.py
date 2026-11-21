@@ -195,7 +195,7 @@ def page_models():
         if ready:
             d.line((47,y+39,52,y+45,62,y+32),fill=BLUE,width=3)
         text(d,86,y+19,label,16,NAVY,True); text(d,86,y+49,note,12,MUTED)
-    card(d,388,164); text(d,44,412,"Both packs enable offline EN ↔ ZH",16,NAVY,True)
+    card(d,388,164); text(d,44,412,"Both packs needed · English / Chinese",16,NAVY,True)
     wrap(d,44,450,"Select either model independently. Downloads require Wi-Fi and translations run locally after installation.",444,14,MUTED)
     button(d,590,"Download selected packs")
     button(d,660,"Remove selected packs",fill=WHITE,fg=BLUE)
