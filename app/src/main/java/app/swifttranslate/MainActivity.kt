@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 8432)
-Total output lines: 436
-
 package app.swifttranslate
 
 import android.content.Intent
@@ -181,7 +178,119 @@ private fun TranslatePage(modifier: Modifier, draft: String, onDraft: (String) -
 
     PageFrame(modifier, "Text translation", "Type, paste, speak or choose a photo.") {
         Surface(color = Color.White, shape = RoundedCornerShape(18.dp)) {
-            Row(Modifier.fillMaxWidth().clickable(onClick = swap).padding(15.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Ar…2432 tokens truncated…kground(PaleBlue, CircleShape), Alignment.Center) { Text(number, color = Blue, fontWeight = FontWeight.Bold) }; Spacer(Modifier.width(13.dp)); Text(text, color = Navy, fontWeight = FontWeight.Medium, lineHeight = 20.sp) } }
+            Row(Modifier.fillMaxWidth().clickable(onClick = swap).padding(15.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                Text(if (enToZh) "English" else "简体中文", color = Navy, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.width(20.dp)); Icon(Icons.Default.SwapHoriz, null, tint = Blue); Spacer(Modifier.width(20.dp))
+                Text(if (enToZh) "简体中文" else "English", color = Navy, fontWeight = FontWeight.SemiBold)
+            }
+        }
+        OutlinedTextField(source, { source = it; onDraft(it) }, Modifier.fillMaxWidth().height(180.dp), placeholder = { Text("Enter text") }, shape = RoundedCornerShape(18.dp), trailingIcon = { IconButton(onClick = { source = ""; onDraft("") }) { Icon(Icons.Default.Close, "Clear") } }, colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = Color(0xFFE4E9F0), focusedBorderColor = Blue, focusedContainerColor = Color.White, unfocusedContainerColor = Color.White))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(onClick = { open("Photo") }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp)) { Icon(Icons.Default.Image, null); Spacer(Modifier.width(5.dp)); Text("Photo") }
+            OutlinedButton(onClick = { open("Voice") }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp)) { Icon(Icons.Default.Mic, null); Spacer(Modifier.width(5.dp)); Text("Voice") }
+        }
+        Button(onClick = { if (source.isBlank()) result = "Enter text to translate." else flowStep = 1 }, Modifier.fillMaxWidth().height(52.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue), shape = RoundedCornerShape(15.dp)) { Icon(Icons.Default.Translate, null); Spacer(Modifier.width(8.dp)); Text("Translate", fontWeight = FontWeight.SemiBold) }
+        if (result.isNotBlank()) Surface(color = Color.White, shape = RoundedCornerShape(18.dp)) { Column(Modifier.fillMaxWidth().padding(18.dp)) { Text("TRANSLATION", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Secondary, letterSpacing = 1.sp); Spacer(Modifier.height(8.dp)); Text(result, color = Navy, fontSize = 18.sp, lineHeight = 25.sp) } }
+        Text("Choose offline models or send text to a selected online platform after confirmation.", color = Secondary, fontSize = 12.sp, lineHeight = 17.sp)
+    }
+
+    if (flowStep == 1) AlertDialog(
+        onDismissRequest = { flowStep = 0 },
+        title = { Text("Choose translation method") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onlineMode = false }) {
+                    RadioButton(selected = !onlineMode, onClick = { onlineMode = false }); Column { Text("Offline · ML Kit"); Text("Runs on this device after model download.", fontSize = 12.sp, color = Secondary) }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onlineMode = true }) {
+                    RadioButton(selected = onlineMode, onClick = { onlineMode = true }); Column { Text("Online · provider website"); Text("Choose a platform; confirmation is required before opening it.", fontSize = 12.sp, color = Secondary) }
+                }
+                if (onlineMode) {
+                    HorizontalDivider()
+                    OnlineProvider.entries.forEach { item ->
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { provider = item }) {
+                            RadioButton(selected = provider == item, onClick = { provider = item }); Text(item.label)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { if (onlineMode) flowStep = 2 else { flowStep = 0; translateOffline() } }) { Text("Continue") } },
+        dismissButton = { TextButton(onClick = { flowStep = 0 }) { Text("Cancel") } }
+    )
+
+    if (flowStep == 2) AlertDialog(
+        onDismissRequest = { flowStep = 0 },
+        title = { Text("Continue with ${provider.label}?") },
+        text = { Text("The text you entered will be placed in ${provider.label}. It may be sent to that provider for online processing under its privacy terms. SwiftLens will open the provider website; nothing is sent until you continue.") },
+        confirmButton = { TextButton(onClick = {
+            flowStep = 0
+            runCatching { OnlineTranslation.open(context, provider, enToZh, source.trim()) }
+                .onFailure { result = "Could not open ${provider.label}. Check that a browser is installed." }
+        }) { Text("Agree and open") } },
+        dismissButton = { TextButton(onClick = { flowStep = 1 }) { Text("Back") } }
+    )
+}
+
+@Composable
+private fun LensPage(modifier: Modifier, setup: () -> Unit, open: (String) -> Unit) {
+    PageFrame(modifier, "Screen translator", "Translate text inside other apps with a floating lens. Choose offline or a confirmed online provider for each translation.") {
+        Surface(color = Color.White, shape = RoundedCornerShape(22.dp)) {
+            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.size(82.dp).background(PaleBlue, CircleShape), Alignment.Center) { Icon(Icons.Default.Lens, null, tint = Blue, modifier = Modifier.size(38.dp)) }
+                Text("Translate Lens", color = Navy, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text("Drag the bubble onto a message, post or subtitle. SwiftLens reads the nearest accessibility text node and shows the translation beside it.", color = Secondary, fontSize = 13.sp, lineHeight = 19.sp)
+                Button(onClick = setup, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Blue), shape = RoundedCornerShape(14.dp)) { Text("Enable Accessibility Service") }
+                OutlinedButton(onClick = { open("Setup") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text("View setup steps") }
+            }
+        }
+        ModelCard()
+        Text("Canvas-rendered, image-only and protected text may not be available through Accessibility.", color = Secondary, fontSize = 12.sp, lineHeight = 17.sp)
+    }
+}
+
+@Composable
+private fun ModelCard() {
+    val manager = remember { RemoteModelManager.getInstance() }
+    val englishModel = remember { TranslateRemoteModel.Builder(TranslateLanguage.ENGLISH).build() }
+    val chineseModel = remember { TranslateRemoteModel.Builder(TranslateLanguage.CHINESE).build() }
+    var status by remember { mutableStateOf("Checking model…") }
+    fun refresh() {
+        manager.isModelDownloaded(englishModel).addOnSuccessListener { en ->
+            manager.isModelDownloaded(chineseModel).addOnSuccessListener { zh -> status = "English ${if (en) "ready" else "missing"} · Chinese ${if (zh) "ready" else "missing"}" }
+        }
+    }
+    LaunchedEffect(Unit) { refresh() }
+    Surface(color = Color.White, shape = RoundedCornerShape(18.dp)) {
+        Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.CloudDownload, null, tint = Blue); Spacer(Modifier.width(10.dp)); Column { Text("Offline language model", color = Navy, fontWeight = FontWeight.SemiBold); Text(status, color = Secondary, fontSize = 12.sp) } }
+            Text("Download both language packs over Wi-Fi for offline use in either direction.", color = Secondary, fontSize = 12.sp, lineHeight = 17.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = {
+                    status = "Downloading English model…"
+                    manager.download(englishModel, com.google.mlkit.common.model.DownloadConditions.Builder().requireWifi().build())
+                        .addOnSuccessListener {
+                            status = "Downloading Chinese model…"
+                            manager.download(chineseModel, com.google.mlkit.common.model.DownloadConditions.Builder().requireWifi().build())
+                                .addOnSuccessListener { status = "Both models ready for offline translation." }
+                                .addOnFailureListener { status = "Chinese model download failed. Check Wi-Fi and retry." }
+                        }.addOnFailureListener { status = "English model download failed. Check Wi-Fi and retry." }
+                }) { Text("Download both") }
+                TextButton(onClick = {
+                    manager.deleteDownloadedModel(englishModel).addOnSuccessListener {
+                        manager.deleteDownloadedModel(chineseModel).addOnSuccessListener { status = "Offline models removed." }.addOnFailureListener { status = "Could not remove Chinese model." }
+                    }.addOnFailureListener { status = "Could not remove English model." }
+                }) { Text("Remove") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SetupPage(modifier: Modifier, openAccessibility: () -> Unit, done: () -> Unit) {
+    PageFrame(modifier, "Set up Translate Lens", "Allow SwiftLens to read only the text you point the lens at.") {
+        listOf("1" to "Open Accessibility settings", "2" to "Choose SwiftLens and turn it on", "3" to "Return here, then drag the floating lens onto text").forEach { (number, text) ->
+            Surface(color = Color.White, shape = RoundedCornerShape(16.dp)) { Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(34.dp).background(PaleBlue, CircleShape), Alignment.Center) { Text(number, color = Blue, fontWeight = FontWeight.Bold) }; Spacer(Modifier.width(13.dp)); Text(text, color = Navy, fontWeight = FontWeight.Medium, lineHeight = 20.sp) } }
         }
         Button(onClick = openAccessibility, modifier = Modifier.fillMaxWidth().height(52.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue), shape = RoundedCornerShape(14.dp)) { Text("Open Accessibility settings") }
         TextButton(onClick = done, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("I’ll do this later", color = Secondary) }
